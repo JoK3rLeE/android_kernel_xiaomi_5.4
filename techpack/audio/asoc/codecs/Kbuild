@@ -233,6 +233,10 @@ INCS +=		$(COMMON_INC) \
 		$(UAPI_INC)
 
 
+INCS += -I$(srctree)/sound/soc/codecs \
+	-I$(srctree)/techpack/audio/include \
+	-I$(srctree)/techpack/audio/include/uapi
+
 EXTRA_CFLAGS += $(INCS)
 
 
@@ -316,3 +320,10 @@ endif
 
 obj-$(CONFIG_SND_SWR_HAPTICS) += swr_haptics_dlkm.o
 swr_haptics_dlkm-y := $(SWR_HAP_OBJS)
+
+
+# CS35L41 amplifier; use the kernel's component-based WM ADSP driver.
+obj-$(CONFIG_SND_SOC_CS35L41) += cs35l41_dlkm.o
+cs35l41_dlkm-y := cs35l41/cs35l41.o \
+		cs35l41/cs35l41-i2c.o \
+		cs35l41/cs35l41-tables.o

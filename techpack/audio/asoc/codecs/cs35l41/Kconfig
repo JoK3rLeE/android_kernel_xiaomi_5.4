@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0
+config SND_SOC_CS35L41
+	tristate "Cirrus Logic CS35L41 smart amplifier"
+	depends on I2C && FW_LOADER
+	select REGMAP_I2C
+	select SND_SOC_WM_ADSP
+	help
+	  Enable support for the Cirrus Logic CS35L41 smart amplifier
+	  used by Xiaomi Cepheus.
