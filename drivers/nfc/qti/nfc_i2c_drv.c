@@ -333,28 +333,31 @@ int nfc_i2c_dev_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	}
 
 	/*
-	 * Xiaomi SM8150 device trees may define explicit nfc_active/nfc_suspend
-	 * states rather than the conventional default state names. Select the
-	 * active state after GPIO setup so the NFC IRQ/CLKREQ pins receive their
-	 * board-defined electrical configuration before the controller is used.
-	 * Boards without these optional states remain supported.
+	 * Xiaomi SM8150 device trees define explicit nfc_active/nfc_suspend
+	 * states. Keep the states for PM transitions; boards without these
+	 * optional states continue to use the GPIO defaults.
 	 */
-	{
-		struct pinctrl *pctrl = devm_pinctrl_get(&client->dev);
+	nfc_dev->pinctrl = devm_pinctrl_get(&client->dev);
+	if (!IS_ERR_OR_NULL(nfc_dev->pinctrl)) {
+		nfc_dev->pinctrl_active =
+			pinctrl_lookup_state(nfc_dev->pinctrl, "nfc_active");
+		if (IS_ERR(nfc_dev->pinctrl_active))
+			nfc_dev->pinctrl_active = NULL;
 
-		if (!IS_ERR_OR_NULL(pctrl)) {
-			struct pinctrl_state *active =
-				pinctrl_lookup_state(pctrl, "nfc_active");
+		nfc_dev->pinctrl_suspend =
+			pinctrl_lookup_state(nfc_dev->pinctrl, "nfc_suspend");
+		if (IS_ERR(nfc_dev->pinctrl_suspend))
+			nfc_dev->pinctrl_suspend = NULL;
 
-			if (!IS_ERR_OR_NULL(active)) {
-				int pinctrl_ret = pinctrl_select_state(pctrl, active);
-
-				if (pinctrl_ret)
-					dev_warn(&client->dev,
-						 "failed to select nfc_active: %d\n",
-						 pinctrl_ret);
-			}
+		if (nfc_dev->pinctrl_active) {
+			ret = pinctrl_select_state(nfc_dev->pinctrl,
+						   nfc_dev->pinctrl_active);
+			if (ret)
+				dev_warn(&client->dev,
+					 "failed to select nfc_active: %d\n", ret);
 		}
+	} else {
+		nfc_dev->pinctrl = NULL;
 	}
 
 	nfc_dev->gpio.ven = nfc_gpio.ven;
@@ -509,6 +512,15 @@ int nfc_i2c_dev_suspend(struct device *device)
 		if (!enable_irq_wake(client->irq))
 			i2c_dev->irq_wake_up = true;
 	}
+
+	if (nfc_dev->pinctrl && nfc_dev->pinctrl_suspend) {
+		int ret = pinctrl_select_state(nfc_dev->pinctrl,
+					       nfc_dev->pinctrl_suspend);
+
+		if (ret)
+			dev_warn(&client->dev,
+				 "failed to select nfc_suspend: %d\n", ret);
+	}
 	return 0;
 }
 
@@ -527,6 +539,15 @@ int nfc_i2c_dev_resume(struct device *device)
 
 	NFCLOG_IPC(nfc_dev, false, "%s: irq_wake_up = %d", __func__,
 							i2c_dev->irq_wake_up);
+
+	if (nfc_dev->pinctrl && nfc_dev->pinctrl_active) {
+		int ret = pinctrl_select_state(nfc_dev->pinctrl,
+					       nfc_dev->pinctrl_active);
+
+		if (ret)
+			dev_warn(&client->dev,
+				 "failed to restore nfc_active: %d\n", ret);
+	}
 
 	if (device_may_wakeup(&client->dev) && i2c_dev->irq_wake_up) {
 		if (!disable_irq_wake(client->irq))
