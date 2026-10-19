@@ -132,6 +132,7 @@ msm_drm-$(CONFIG_DRM_MSM) += \
 	msm_fb.o \
 	msm_iommu.o \
 	msm_drv.o \
+	msm_drm_notify.o \
 	msm_gem.o \
 	msm_gem_prime.o \
 	msm_gem_vma.o \
