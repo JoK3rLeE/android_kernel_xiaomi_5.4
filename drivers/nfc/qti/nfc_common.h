@@ -28,6 +28,9 @@
 #include "nfc_i2c_drv.h"
 #include "nfc_i3c_drv.h"
 
+struct pinctrl;
+struct pinctrl_state;
+
 // Max device count for this driver
 #define DEV_COUNT            1
 
@@ -234,6 +237,10 @@ struct nfc_dev {
 	struct platform_ldo ldo;
 	struct cold_reset cold_reset;
 	struct regulator *reg;
+	/* Optional board-specific pinctrl states (e.g. SM8150 Xiaomi). */
+	struct pinctrl *pinctrl;
+	struct pinctrl_state *pinctrl_active;
+	struct pinctrl_state *pinctrl_suspend;
 
 	/* read buffer*/
 	size_t kbuflen;
