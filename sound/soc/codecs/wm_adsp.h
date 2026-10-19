@@ -100,6 +100,11 @@ struct wm_adsp {
 
 	unsigned int lock_regions;
 
+	/* CS35L41 rate-control compatibility fields. */
+	bool unlock_all;
+	unsigned int n_rx_rates;
+	unsigned int n_tx_rates;
+
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_root;
 	char *wmfw_file_name;
