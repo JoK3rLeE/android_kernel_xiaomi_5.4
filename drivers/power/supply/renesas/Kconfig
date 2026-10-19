@@ -3,7 +3,7 @@ menu "Renesas Electronics Corporation Charger support"
 
 config IDT_P9220
 	tristate "IDT P9220 wireless charger"
-	depends on I2C
+	depends on I2C && OF && GPIOLIB && POWER_SUPPLY
 	help
 	  Enable support for the IDT P9220 wireless charging receiver.
 	  The driver controls the receiver over I2C and reports charging
