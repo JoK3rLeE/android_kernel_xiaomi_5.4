@@ -27,3 +27,17 @@
 	compatible = "qcom,sm8150-cdp", "qcom,sm8150", "qcom,cdp";
 	qcom,board-id = <37 0>;
 };
+
+/*
+ * The 5.4 SM8150 audio machine driver reads Type-C role/mode from the
+ * PM8150B charger IIO channels. Raphael's 5.4 overlay supplies this ABI;
+ * Cepheus needs the same channels for its USB-C audio path.
+ */
+&snd_934x {
+	io-channels =
+		<&pm8150b_charger PSY_IIO_TYPEC_POWER_ROLE>,
+		<&pm8150b_charger PSY_IIO_TYPEC_MODE>;
+	io-channel-names =
+		"typec_power_role",
+		"typec_mode";
+};
