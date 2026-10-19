@@ -2178,6 +2178,154 @@ static int smb5_init_batt_psy(struct smb5 *chip)
 	return rc;
 }
 
+
+#ifdef CONFIG_MACH_XIAOMI_CEPHEUS
+/*
+ * Cepheus uses the IDT P9220 as the wireless receiver. Keep the legacy
+ * "wireless" power-supply ABI used by the receiver driver and userspace.
+ */
+static enum power_supply_property smb5_wireless_props[] = {
+	POWER_SUPPLY_PROP_WIRELESS_VERSION,
+	POWER_SUPPLY_PROP_SIGNAL_STRENGTH,
+	POWER_SUPPLY_PROP_WIRELESS_WAKELOCK,
+	POWER_SUPPLY_PROP_INPUT_VOLTAGE_REGULATION,
+	POWER_SUPPLY_PROP_WIRELESS_CP_EN,
+	POWER_SUPPLY_PROP_WIRELESS_POWER_GOOD_EN,
+	POWER_SUPPLY_PROP_TX_ADAPTER,
+};
+
+static int smb5_get_idt_property(enum power_supply_property psp,
+				 union power_supply_propval *val)
+{
+	struct power_supply *idt_psy;
+	int rc;
+
+	idt_psy = power_supply_get_by_name("idt");
+	if (!idt_psy)
+		return -ENODEV;
+
+	rc = power_supply_get_property(idt_psy, psp, val);
+	power_supply_put(idt_psy);
+
+	return rc;
+}
+
+static int smb5_set_idt_property(enum power_supply_property psp,
+				const union power_supply_propval *val)
+{
+	struct power_supply *idt_psy;
+	int rc;
+
+	idt_psy = power_supply_get_by_name("idt");
+	if (!idt_psy)
+		return -ENODEV;
+
+	rc = power_supply_set_property(idt_psy, psp, val);
+	power_supply_put(idt_psy);
+
+	return rc;
+}
+
+static int smb5_wireless_get_prop(struct power_supply *psy,
+				  enum power_supply_property psp,
+				  union power_supply_propval *val)
+{
+	struct smb5 *chip = power_supply_get_drvdata(psy);
+	struct smb_charger *chg = &chip->chg;
+	int rc;
+
+	switch (psp) {
+	case POWER_SUPPLY_PROP_WIRELESS_VERSION:
+	case POWER_SUPPLY_PROP_SIGNAL_STRENGTH:
+	case POWER_SUPPLY_PROP_TX_ADAPTER:
+		return smb5_get_idt_property(psp, val);
+	case POWER_SUPPLY_PROP_WIRELESS_WAKELOCK:
+		val->intval = 1;
+		return 0;
+	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_REGULATION:
+		rc = smb5_get_idt_property(psp, val);
+		if (!rc)
+			val->intval *= 1000; /* IDT reports millivolts. */
+		return rc;
+	case POWER_SUPPLY_PROP_WIRELESS_CP_EN:
+		val->intval = chg->flag_dc_present;
+		return 0;
+	case POWER_SUPPLY_PROP_WIRELESS_POWER_GOOD_EN:
+		val->intval = chg->power_good_en;
+		return 0;
+	default:
+		return -EINVAL;
+	}
+}
+
+static int smb5_wireless_set_prop(struct power_supply *psy,
+				  enum power_supply_property psp,
+				  const union power_supply_propval *val)
+{
+	struct smb5 *chip = power_supply_get_drvdata(psy);
+	struct smb_charger *chg = &chip->chg;
+
+	switch (psp) {
+	case POWER_SUPPLY_PROP_WIRELESS_WAKELOCK:
+		return smblib_set_prop_wireless_wakelock(chg, val);
+	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_REGULATION:
+		return smb5_set_idt_property(psp, val);
+	case POWER_SUPPLY_PROP_WIRELESS_CP_EN:
+		return smblib_set_wirless_cp_enable(chg, val);
+	case POWER_SUPPLY_PROP_WIRELESS_POWER_GOOD_EN:
+		return smblib_set_wirless_power_good_enable(chg, val);
+	default:
+		return -EINVAL;
+	}
+}
+
+static int smb5_wireless_prop_is_writeable(struct power_supply *psy,
+					   enum power_supply_property psp)
+{
+	switch (psp) {
+	case POWER_SUPPLY_PROP_WIRELESS_WAKELOCK:
+	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_REGULATION:
+	case POWER_SUPPLY_PROP_WIRELESS_CP_EN:
+	case POWER_SUPPLY_PROP_WIRELESS_POWER_GOOD_EN:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+static const struct power_supply_desc wireless_psy_desc = {
+	.name = "wireless",
+	.type = POWER_SUPPLY_TYPE_WIRELESS,
+	.properties = smb5_wireless_props,
+	.num_properties = ARRAY_SIZE(smb5_wireless_props),
+	.get_property = smb5_wireless_get_prop,
+	.set_property = smb5_wireless_set_prop,
+	.property_is_writeable = smb5_wireless_prop_is_writeable,
+};
+
+static int smb5_init_wireless_psy(struct smb5 *chip)
+{
+	struct power_supply_config wireless_cfg = {};
+	struct smb_charger *chg = &chip->chg;
+	int rc;
+
+	wireless_cfg.drv_data = chip;
+	wireless_cfg.of_node = chg->dev->of_node;
+	chg->wireless_psy = devm_power_supply_register(chg->dev,
+						      &wireless_psy_desc,
+						      &wireless_cfg);
+	if (IS_ERR(chg->wireless_psy)) {
+		rc = PTR_ERR(chg->wireless_psy);
+		chg->wireless_psy = NULL;
+		dev_err(chg->dev, "Couldn't register wireless power supply: %d\n",
+			rc);
+		return rc;
+	}
+
+	return 0;
+}
+#endif
+
 /******************************
  * VBUS REGULATOR REGISTRATION *
  ******************************/
@@ -4065,6 +4213,14 @@ static int smb5_probe(struct platform_device *pdev)
 		pr_err("Couldn't initialize batt psy rc=%d\n", rc);
 		goto cleanup;
 	}
+
+	#ifdef CONFIG_MACH_XIAOMI_CEPHEUS
+	rc = smb5_init_wireless_psy(chip);
+	if (rc < 0) {
+		pr_err("Couldn't initialize wireless psy rc=%d\n", rc);
+		goto cleanup;
+	}
+#endif
 
 	rc = smb5_init_typec_class(chip);
 	if (rc < 0) {
