@@ -26,7 +26,7 @@ Port the hardware integration, not just the 4.14 config symbols. For each device
 
 1. Establish Cepheus board DTS/DTSI and overlay build integration.
 2. Audit the imported FTS V521 driver against 5.4 APIs, preserve its gesture/FOD sysfs/input ABI, and validate the new DRM notifier compatibility bridge.
-3. Port/adapt the CS35L41 codec and machine-card/DT integration; resolve the actual CSPL dependency and whether its config symbol is valid.
+3. Compile-audit and validate the CS35L41 codec, Cepheus QUAT MI2S DAI link, firmware/DSP loading and speaker routing; do not add a separate CSPL symbol unless a real Kconfig option is found.
 4. Reverse-map Cepheus actuator tuning and sensor registration into the 5.4 `cam_actuator` framework; do not assume a standalone AK7374 driver exists.
 5. Audit the imported IDT P9220 driver and verify the Cepheus wireless-charging topology.
 6. Reconcile SMB1390/SMB5/FG integration against Cepheus DT and the ROM's `hvdcp_opti` expectations.
