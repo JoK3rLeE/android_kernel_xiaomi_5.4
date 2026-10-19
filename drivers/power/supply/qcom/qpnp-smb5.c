@@ -2266,6 +2266,9 @@ static int smb5_wireless_set_prop(struct power_supply *psy,
 	struct smb_charger *chg = &chip->chg;
 
 	switch (psp) {
+	case POWER_SUPPLY_PROP_WIRELESS_VERSION:
+		dev_info(chg->dev, "set version=%d\\n", val->intval);
+		return 0;
 	case POWER_SUPPLY_PROP_WIRELESS_WAKELOCK:
 		return smblib_set_prop_wireless_wakelock(chg, val);
 	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_REGULATION:
@@ -2283,6 +2286,7 @@ static int smb5_wireless_prop_is_writeable(struct power_supply *psy,
 					   enum power_supply_property psp)
 {
 	switch (psp) {
+	case POWER_SUPPLY_PROP_WIRELESS_VERSION:
 	case POWER_SUPPLY_PROP_WIRELESS_WAKELOCK:
 	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_REGULATION:
 	case POWER_SUPPLY_PROP_WIRELESS_CP_EN:
