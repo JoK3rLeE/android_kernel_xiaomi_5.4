@@ -36,6 +36,7 @@ Port the hardware integration, not just the 4.14 config symbols. For each device
 ## Current audit findings
 
 - The imported FTS V521 source still contains the 4.14-era `linux/msm_drm_notify.h` dependency. The 5.4 display stack instead exposes `drm_panel_notifier`; a compatibility header, blocking notifier chain, and SDE event bridge have been added so the legacy touchscreen callback can receive blank events. This has not yet been compile-validated.
+- The shared SM8150 NFC node defines `nfc_active` and `nfc_suspend` pinctrl states. The QTI I2C driver now retains these optional states and switches them during system suspend/resume, while leaving boards without those states supported. This PM change is source-reviewed but not runtime-tested.
 - `CONFIG_TOUCHSCREEN_COMMON` already had a definition at the end of `drivers/input/touchscreen/Kconfig`. An earlier porting edit accidentally added a duplicate definition near the top; this has now been removed. The file has one definition, and the Cepheus config enables it.
 - The CS35L41 codec sources, `SND_SOC_CS35L41` Kconfig entry, WM ADSP event exports, and techpack composite-object integration are now present. The port is not build-validated; confirm Kconfig resolution, link symbols, firmware loading, and the actual Cepheus speaker route before calling audio complete. `CONFIG_MSM_CSPL` is not a real symbol in the inspected tree; CSPL mailbox handling is implemented within the codec driver. `CONFIG_VCM_AK7374` remains disabled because no matching standalone AK7374 source was found in the inspected 4.14 tree.
 
