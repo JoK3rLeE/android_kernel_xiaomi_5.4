@@ -45,10 +45,6 @@
 #define __CHIPSET__ "SM8150 "
 #define MSM_DAILINK_NAME(name) (__CHIPSET__#name)
 
-#if defined(CONFIG_MACH_XIAOMI_CEPHEUS) && IS_ENABLED(CONFIG_SND_SOC_CS35L41)
-#define CS35L41_CODEC_NAME "cs35l41.0-0040"
-#endif
-
 #define SAMPLING_RATE_8KHZ      8000
 #define SAMPLING_RATE_11P025KHZ 11025
 #define SAMPLING_RATE_16KHZ     16000
@@ -6785,7 +6781,7 @@ static int msm_snd_card_tavil_late_probe(struct snd_soc_card *card)
 	amp_rtd = snd_soc_get_pcm_runtime(card, LPASS_BE_QUAT_MI2S_RX);
 	if (amp_rtd) {
 		amp_component = snd_soc_rtdcom_lookup(amp_rtd,
-						      "cs35l41");
+						      CS35L41_COMPONENT_NAME);
 		if (amp_component) {
 			cs35l41_dapm = snd_soc_component_get_dapm(amp_component);
 			snd_soc_dapm_ignore_suspend(cs35l41_dapm, "AMP Playback");
