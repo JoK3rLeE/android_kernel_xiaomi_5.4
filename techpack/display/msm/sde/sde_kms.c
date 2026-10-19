@@ -28,6 +28,7 @@
 #include <linux/dma-buf.h>
 #include <linux/memblock.h>
 #include <linux/suspend.h>
+#include <linux/msm_drm_notify.h>
 #include <drm/drm_atomic_uapi.h>
 #include <drm/drm_probe_helper.h>
 
@@ -989,9 +990,47 @@ static void _sde_kms_drm_check_dpms(struct drm_atomic_state *old_state,
 			notifier_data.refresh_rate = new_fps;
 			notifier_data.id = connector->base.id;
 
-			if (connector->panel)
+			if (connector->panel) {
+				struct msm_drm_notifier legacy_data;
+				int legacy_mode = new_mode;
+
 				drm_panel_notifier_call_chain(connector->panel,
 							event, &notifier_data);
+
+				/*
+				 * Keep the legacy MSM blank-event ABI working for
+				 * touchscreen drivers while they migrate to the
+				 * per-panel drm_panel notifier API.
+				 */
+				if (legacy_mode == DRM_PANEL_BLANK_FPS_CHANGE)
+					legacy_mode = old_mode;
+
+				switch (legacy_mode) {
+				case DRM_PANEL_BLANK_UNBLANK:
+					legacy_mode = MSM_DRM_BLANK_UNBLANK;
+					break;
+				case DRM_PANEL_BLANK_POWERDOWN:
+					legacy_mode = MSM_DRM_BLANK_POWERDOWN;
+					break;
+				case DRM_PANEL_BLANK_LP:
+					legacy_mode = MSM_DRM_BLANK_LP1;
+					break;
+				default:
+					/* Ignore unsupported legacy blank states. */
+					continue;
+				}
+
+				legacy_data.id = MSM_DRM_PRIMARY_DISPLAY;
+				legacy_data.data = &legacy_mode;
+
+				if (event == DRM_PANEL_EARLY_EVENT_BLANK)
+					msm_drm_notifier_call_chain(
+						MSM_DRM_EARLY_EVENT_BLANK,
+						&legacy_data);
+				else if (event == DRM_PANEL_EVENT_BLANK)
+					msm_drm_notifier_call_chain(
+						MSM_DRM_EVENT_BLANK, &legacy_data);
+			}
 		}
 	}
 
