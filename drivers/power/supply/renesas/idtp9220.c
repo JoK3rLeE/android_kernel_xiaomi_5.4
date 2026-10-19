@@ -39,9 +39,9 @@ struct idtp9220_access_func {
 };
 
 struct idtp9220_dt_props {
-	unsigned int irq_gpio;
-	unsigned int enable_gpio;
-	unsigned int wpc_det_gpio;
+	int irq_gpio;
+	int enable_gpio;
+	int wpc_det_gpio;
 };
 
 struct idtp9220_device_info {
@@ -53,6 +53,11 @@ struct idtp9220_device_info {
 	struct idtp9220_dt_props dt_props;
 	int irq;
 	int wpc_irq;
+	bool irq_requested;
+	bool wpc_irq_requested;
+	bool irq_wake_enabled;
+	bool wpc_irq_wake_enabled;
+	bool sysfs_created;
 	struct delayed_work irq_work;
 	struct delayed_work wpc_det_work;
 	struct pinctrl *idt_pinctrl;
@@ -135,22 +140,26 @@ module_param_named(signal_range, idt_signal_range, int, 0644);
 
 static int idtp9220_get_property_names(struct idtp9220_device_info *di)
 {
-	di->batt_psy = power_supply_get_by_name("battery");
+	if (!di->batt_psy)
+		di->batt_psy = power_supply_get_by_name("battery");
 	if (!di->batt_psy) {
 		dev_err(di->dev, "[idt] no batt_psy,return\n");
 		return -EINVAL;
 	}
-	di->dc_psy = power_supply_get_by_name("dc");
+	if (!di->dc_psy)
+		di->dc_psy = power_supply_get_by_name("dc");
 	if (!di->dc_psy) {
 		dev_err(di->dev, "[idt] no dc_psy,return\n");
 		return -EINVAL;
 	}
-	di->usb_psy = power_supply_get_by_name("usb");
+	if (!di->usb_psy)
+		di->usb_psy = power_supply_get_by_name("usb");
 	if (!di->usb_psy) {
 		dev_err(di->dev, "[idt] no usb_psy,return\n");
 		return -EINVAL;
 	}
-	di->wireless_psy = power_supply_get_by_name("wireless");
+	if (!di->wireless_psy)
+		di->wireless_psy = power_supply_get_by_name("wireless");
 	if (!di->wireless_psy) {
 		dev_err(di->dev, "[idt] no wireless_psy,return\n");
 		return -EINVAL;
@@ -744,25 +753,26 @@ static int idtp9220_set_present(struct idtp9220_device_info *di, int enable)
 
 static int idtp9220_set_enable_mode(struct idtp9220_device_info *di, int enable)
 {
-	int ret = 0;
+	int ret;
 
-	if (gpio_is_valid(di->dt_props.enable_gpio)) {
-		ret = gpio_request(di->dt_props.enable_gpio, "idt-enable-gpio");
-		if (ret) {
-			dev_err(di->dev,
-				"%s: unable to request idt enable gpio [%d]\n",
-				__func__, di->dt_props.enable_gpio);
-		}
+	if (!gpio_is_valid(di->dt_props.enable_gpio))
+		return -EINVAL;
 
-		ret = gpio_direction_output(di->dt_props.enable_gpio, !enable);
-		if (ret) {
-			dev_err(di->dev,
-				"%s: cannot set direction for idt enable gpio [%d]\n",
-				__func__, di->dt_props.enable_gpio);
-		}
-		gpio_free(di->dt_props.enable_gpio);
+	ret = gpio_request(di->dt_props.enable_gpio, "idt-enable-gpio");
+	if (ret) {
+		dev_err(di->dev,
+			"%s: unable to request idt enable gpio [%d]\n",
+			__func__, di->dt_props.enable_gpio);
+		return ret;
 	}
 
+	ret = gpio_direction_output(di->dt_props.enable_gpio, !enable);
+	if (ret)
+		dev_err(di->dev,
+			"%s: cannot set direction for idt enable gpio [%d]\n",
+			__func__, di->dt_props.enable_gpio);
+
+	gpio_free(di->dt_props.enable_gpio);
 	return ret;
 }
 
@@ -774,10 +784,13 @@ static ssize_t chip_enable_store(struct device *dev,
 	struct i2c_client *client = container_of(dev, struct i2c_client, dev);
 	struct idtp9220_device_info *di = i2c_get_clientdata(client);
 
-	ret = (int)simple_strtoul(buf, NULL, 10);
-	enable = !!ret;
+	ret = kstrtoint(buf, 10, &enable);
+	if (ret)
+		return ret;
 
-	idtp9220_set_enable_mode(di, enable);
+	ret = idtp9220_set_enable_mode(di, !!enable);
+	if (ret)
+		return ret;
 
 	return count;
 }
@@ -817,15 +830,21 @@ static int idtp9220_parse_dt(struct idtp9220_device_info *di)
 	}
 
 	di->dt_props.irq_gpio = of_get_named_gpio(node, "idt,irq", 0);
-	if ((!gpio_is_valid(di->dt_props.irq_gpio)))
+	if (di->dt_props.irq_gpio == -EPROBE_DEFER)
+		return -EPROBE_DEFER;
+	if (!gpio_is_valid(di->dt_props.irq_gpio))
 		return -EINVAL;
 
 	di->dt_props.enable_gpio = of_get_named_gpio(node, "idt,enable", 0);
-	if ((!gpio_is_valid(di->dt_props.enable_gpio)))
+	if (di->dt_props.enable_gpio == -EPROBE_DEFER)
+		return -EPROBE_DEFER;
+	if (!gpio_is_valid(di->dt_props.enable_gpio))
 		return -EINVAL;
 
 	di->dt_props.wpc_det_gpio = of_get_named_gpio(node, "idt,wpc-det", 0);
-	if ((!gpio_is_valid(di->dt_props.irq_gpio)))
+	if (di->dt_props.wpc_det_gpio == -EPROBE_DEFER)
+		return -EPROBE_DEFER;
+	if (!gpio_is_valid(di->dt_props.wpc_det_gpio))
 		return -EINVAL;
 
 	return 0;
@@ -833,28 +852,34 @@ static int idtp9220_parse_dt(struct idtp9220_device_info *di)
 
 static int idtp9220_gpio_init(struct idtp9220_device_info *di)
 {
-	int ret = 0;
-	int irqn = 0;
-	int wpc_irq = 0;
+	int ret;
+	int irqn;
+	int wpc_irq;
 
 	di->idt_pinctrl = devm_pinctrl_get(di->dev);
-	if (IS_ERR_OR_NULL(di->idt_pinctrl)) {
-		dev_err(di->dev, "No pinctrl config specified\n");
-		ret = PTR_ERR(di->dev);
+	if (IS_ERR(di->idt_pinctrl)) {
+		ret = PTR_ERR(di->idt_pinctrl);
+		dev_err(di->dev, "No pinctrl config specified: %d\n", ret);
 		return ret;
 	}
+	if (!di->idt_pinctrl)
+		return -ENODEV;
+
 	di->idt_gpio_active =
 		pinctrl_lookup_state(di->idt_pinctrl, "idt_active");
 	if (IS_ERR_OR_NULL(di->idt_gpio_active)) {
-		dev_err(di->dev, "No active config specified\n");
-		ret = PTR_ERR(di->idt_gpio_active);
+		ret = IS_ERR(di->idt_gpio_active) ?
+			PTR_ERR(di->idt_gpio_active) : -EINVAL;
+		dev_err(di->dev, "No active config specified: %d\n", ret);
 		return ret;
 	}
+
 	di->idt_gpio_suspend =
 		pinctrl_lookup_state(di->idt_pinctrl, "idt_suspend");
 	if (IS_ERR_OR_NULL(di->idt_gpio_suspend)) {
-		dev_err(di->dev, "No suspend config specified\n");
-		ret = PTR_ERR(di->idt_gpio_suspend);
+		ret = IS_ERR(di->idt_gpio_suspend) ?
+			PTR_ERR(di->idt_gpio_suspend) : -EINVAL;
+		dev_err(di->dev, "No suspend config specified: %d\n", ret);
 		return ret;
 	}
 
@@ -864,35 +889,21 @@ static int idtp9220_gpio_init(struct idtp9220_device_info *di)
 		return ret;
 	}
 
-	if (gpio_is_valid(di->dt_props.irq_gpio)) {
-		irqn = gpio_to_irq(di->dt_props.irq_gpio);
-		if (irqn < 0) {
-			ret = irqn;
-			goto err_irq_gpio;
-		}
-		di->irq = irqn;
-	} else {
-		dev_err(di->dev, "%s: irq gpio not provided\n", __func__);
-		goto err_irq_gpio;
-	}
+	if (!gpio_is_valid(di->dt_props.irq_gpio))
+		return -EINVAL;
+	irqn = gpio_to_irq(di->dt_props.irq_gpio);
+	if (irqn < 0)
+		return irqn;
+	di->irq = irqn;
 
-	if (gpio_is_valid(di->dt_props.wpc_det_gpio)) {
-		wpc_irq = gpio_to_irq(di->dt_props.wpc_det_gpio);
-		if (wpc_irq < 0) {
-			ret = wpc_irq;
-			goto err_wpc_irq;
-		}
-		di->wpc_irq = wpc_irq;
-	} else {
-		dev_err(di->dev, "%s: wpc irq gpio not provided\n", __func__);
-		goto err_wpc_irq;
-	}
+	if (!gpio_is_valid(di->dt_props.wpc_det_gpio))
+		return -EINVAL;
+	wpc_irq = gpio_to_irq(di->dt_props.wpc_det_gpio);
+	if (wpc_irq < 0)
+		return wpc_irq;
+	di->wpc_irq = wpc_irq;
 
-err_wpc_irq:
-	gpio_free(di->dt_props.wpc_det_gpio);
-err_irq_gpio:
-	gpio_free(di->dt_props.irq_gpio);
-	return ret;
+	return 0;
 }
 
 static bool need_irq_cleared(struct idtp9220_device_info *di)
@@ -1913,9 +1924,9 @@ static irqreturn_t idtp9220_irq_handler(int irq, void *dev_id)
 
 static int idtp9220_irq_request(struct idtp9220_device_info *di)
 {
-	int ret = 0;
+	int ret;
 
-	if (!di->irq) {
+	if (di->irq <= 0) {
 		dev_err(di->dev, "%s: irq is wrong\n", __func__);
 		return -EINVAL;
 	}
@@ -1923,17 +1934,20 @@ static int idtp9220_irq_request(struct idtp9220_device_info *di)
 	ret = request_irq(di->irq, idtp9220_irq_handler, IRQF_TRIGGER_FALLING,
 			  di->name, di);
 	if (ret) {
-		dev_err(di->dev, "%s: request_irq failed\n", __func__);
+		dev_err(di->dev, "%s: request_irq failed: %d\n", __func__, ret);
 		return ret;
 	}
+	di->irq_requested = true;
 
 	ret = enable_irq_wake(di->irq);
 	if (ret) {
-		dev_err(di->dev, "%s: enable_irq_wake failed\n", __func__);
+		dev_err(di->dev, "%s: enable_irq_wake failed: %d\n",
+			__func__, ret);
 		return ret;
 	}
+	di->irq_wake_enabled = true;
 
-	if (!di->wpc_irq) {
+	if (di->wpc_irq <= 0) {
 		dev_err(di->dev, "%s: wpc irq is wrong\n", __func__);
 		return -EINVAL;
 	}
@@ -1942,17 +1956,80 @@ static int idtp9220_irq_request(struct idtp9220_device_info *di)
 			  IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING, "wpc_det",
 			  di);
 	if (ret) {
-		dev_err(di->dev, "%s: wpc request_irq failed\n", __func__);
+		dev_err(di->dev, "%s: wpc request_irq failed: %d\n",
+			__func__, ret);
 		return ret;
 	}
+	di->wpc_irq_requested = true;
 
 	ret = enable_irq_wake(di->wpc_irq);
 	if (ret) {
-		dev_err(di->dev, "%s: enable_irq_wake failed\n", __func__);
+		dev_err(di->dev, "%s: wpc enable_irq_wake failed: %d\n",
+			__func__, ret);
 		return ret;
 	}
+	di->wpc_irq_wake_enabled = true;
 
 	return 0;
+}
+
+static void idtp9220_free_irqs(struct idtp9220_device_info *di)
+{
+	if (di->wpc_irq_wake_enabled) {
+		disable_irq_wake(di->wpc_irq);
+		di->wpc_irq_wake_enabled = false;
+	}
+	if (di->wpc_irq_requested) {
+		free_irq(di->wpc_irq, di);
+		di->wpc_irq_requested = false;
+	}
+	if (di->irq_wake_enabled) {
+		disable_irq_wake(di->irq);
+		di->irq_wake_enabled = false;
+	}
+	if (di->irq_requested) {
+		free_irq(di->irq, di);
+		di->irq_requested = false;
+	}
+}
+
+static void idtp9220_cancel_works(struct idtp9220_device_info *di)
+{
+	cancel_delayed_work_sync(&di->irq_work);
+	cancel_delayed_work_sync(&di->wpc_det_work);
+	cancel_delayed_work_sync(&di->chg_detect_work);
+	cancel_delayed_work_sync(&di->chg_monitor_work);
+	cancel_delayed_work_sync(&di->fast_operate_work);
+	cancel_delayed_work_sync(&di->cmd_check_work);
+	cancel_delayed_work_sync(&di->bpp_connect_load_work);
+	cancel_delayed_work_sync(&di->epp_connect_load_work);
+	cancel_delayed_work_sync(&di->vout_regulator_work);
+	cancel_delayed_work_sync(&di->rx_vout_work);
+	cancel_delayed_work_sync(&di->dc_check_work);
+	cancel_delayed_work_sync(&di->mophie_tx_work);
+	cancel_delayed_work_sync(&di->bpp_e5_tx_work);
+	cancel_delayed_work_sync(&di->qc2_f1_tx_work);
+	cancel_delayed_work_sync(&di->qc3_epp_work);
+}
+
+static void idtp9220_put_power_supplies(struct idtp9220_device_info *di)
+{
+	if (di->wireless_psy) {
+		power_supply_put(di->wireless_psy);
+		di->wireless_psy = NULL;
+	}
+	if (di->usb_psy) {
+		power_supply_put(di->usb_psy);
+		di->usb_psy = NULL;
+	}
+	if (di->dc_psy) {
+		power_supply_put(di->dc_psy);
+		di->dc_psy = NULL;
+	}
+	if (di->batt_psy) {
+		power_supply_put(di->batt_psy);
+		di->batt_psy = NULL;
+	}
 }
 
 static struct regmap_config i2c_idtp9220_regmap_config = {
@@ -2080,12 +2157,12 @@ static const struct power_supply_desc idtp_psy_desc = {
 static int idtp9220_probe(struct i2c_client *client,
 			  const struct i2c_device_id *id)
 {
-	int ret = 0;
+	int ret;
 	struct idtp9220_device_info *di;
 	struct i2c_adapter *adapter = to_i2c_adapter(client->dev.parent);
 	struct power_supply_config idtp_cfg = {};
 
-	if (!i2c_check_functionality(adapter, I2C_FUNC_SMBUS_BYTE)) {
+	if (!i2c_check_functionality(adapter, I2C_FUNC_I2C)) {
 		dev_err(&client->dev, "i2c check functionality failed!\n");
 		return -EIO;
 	}
@@ -2103,14 +2180,33 @@ static int idtp9220_probe(struct i2c_client *client,
 	di->ss = 2;
 	di->status = NORMAL_MODE;
 	di->regmap = devm_regmap_init_i2c(client, &i2c_idtp9220_regmap_config);
-	if (!di->regmap)
-		return -ENODEV;
+	if (IS_ERR(di->regmap))
+		return PTR_ERR(di->regmap);
+
 	di->bus.read = idtp9220_read;
 	di->bus.write = idtp9220_write;
 	di->bus.read_buf = idtp9220_read_buffer;
 	di->bus.write_buf = idtp9220_write_buffer;
+
 	INIT_DELAYED_WORK(&di->irq_work, idtp9220_irq_work);
 	INIT_DELAYED_WORK(&di->wpc_det_work, idtp9220_wpc_det_work);
+	INIT_DELAYED_WORK(&di->chg_monitor_work, idtp9220_monitor_work);
+	INIT_DELAYED_WORK(&di->chg_detect_work, idtp9220_chg_detect_work);
+	INIT_DELAYED_WORK(&di->bpp_connect_load_work,
+			  idtp9220_bpp_connect_load_work);
+	INIT_DELAYED_WORK(&di->epp_connect_load_work,
+			  idtp9220_epp_connect_load_work);
+	INIT_DELAYED_WORK(&di->cmd_check_work, idtp9220_cmd_check_work);
+	INIT_DELAYED_WORK(&di->vout_regulator_work,
+			  idtp9220_vout_regulator_work);
+	INIT_DELAYED_WORK(&di->rx_vout_work, idtp9220_rx_vout_work);
+	INIT_DELAYED_WORK(&di->dc_check_work, idtp9220_dc_check_work);
+	INIT_DELAYED_WORK(&di->fast_operate_work, idtp9220_fast_operate_work);
+	INIT_DELAYED_WORK(&di->mophie_tx_work, idtp9220_mophie_tx_work);
+	INIT_DELAYED_WORK(&di->bpp_e5_tx_work, idtp9220_bpp_e5_tx_work);
+	INIT_DELAYED_WORK(&di->qc2_f1_tx_work, idtp9220_qc2_f1_tx_work);
+	INIT_DELAYED_WORK(&di->qc3_epp_work, idtp9220_qc3_epp_work);
+
 	mutex_init(&di->read_lock);
 	mutex_init(&di->write_lock);
 	device_init_wakeup(&client->dev, true);
@@ -2129,37 +2225,28 @@ static int idtp9220_probe(struct i2c_client *client,
 		goto cleanup;
 	}
 
+	idtp_cfg.drv_data = di;
+	di->idtp_psy = power_supply_register(di->dev, &idtp_psy_desc,
+					     &idtp_cfg);
+	if (IS_ERR(di->idtp_psy)) {
+		ret = PTR_ERR(di->idtp_psy);
+		di->idtp_psy = NULL;
+		dev_err(di->dev, "power supply registration failed: %d\n", ret);
+		goto cleanup;
+	}
+
+	ret = sysfs_create_group(&client->dev.kobj, &sysfs_group_attrs);
+	if (ret) {
+		dev_err(&client->dev, "create sysfs attrs failed: %d\n", ret);
+		goto cleanup;
+	}
+	di->sysfs_created = true;
+
 	ret = idtp9220_irq_request(di);
 	if (ret < 0) {
 		dev_err(di->dev, "%s: request irq error [%d]\n", __func__, ret);
 		goto cleanup;
 	}
-
-	if (sysfs_create_group(&client->dev.kobj, &sysfs_group_attrs)) {
-		dev_err(&client->dev, "create sysfs attrs failed!\n");
-		ret = -EIO;
-		goto cleanup;
-	}
-	idtp_cfg.drv_data = di;
-	di->idtp_psy =
-		power_supply_register(di->dev, &idtp_psy_desc, &idtp_cfg);
-
-	INIT_DELAYED_WORK(&di->chg_monitor_work, idtp9220_monitor_work);
-	INIT_DELAYED_WORK(&di->chg_detect_work, idtp9220_chg_detect_work);
-	INIT_DELAYED_WORK(&di->bpp_connect_load_work,
-			  idtp9220_bpp_connect_load_work);
-	INIT_DELAYED_WORK(&di->epp_connect_load_work,
-			  idtp9220_epp_connect_load_work);
-	INIT_DELAYED_WORK(&di->cmd_check_work, idtp9220_cmd_check_work);
-	INIT_DELAYED_WORK(&di->vout_regulator_work,
-			  idtp9220_vout_regulator_work);
-	INIT_DELAYED_WORK(&di->rx_vout_work, idtp9220_rx_vout_work);
-	INIT_DELAYED_WORK(&di->dc_check_work, idtp9220_dc_check_work);
-	INIT_DELAYED_WORK(&di->fast_operate_work, idtp9220_fast_operate_work);
-	INIT_DELAYED_WORK(&di->mophie_tx_work, idtp9220_mophie_tx_work);
-	INIT_DELAYED_WORK(&di->bpp_e5_tx_work, idtp9220_bpp_e5_tx_work);
-	INIT_DELAYED_WORK(&di->qc2_f1_tx_work, idtp9220_qc2_f1_tx_work);
-	INIT_DELAYED_WORK(&di->qc3_epp_work, idtp9220_qc3_epp_work);
 
 	dev_info(di->dev, "[idt] success probe idtp922x driver\n");
 	schedule_delayed_work(&di->chg_detect_work, 3 * HZ);
@@ -2167,8 +2254,20 @@ static int idtp9220_probe(struct i2c_client *client,
 	return 0;
 
 cleanup:
-	free_irq(di->irq, di);
-	cancel_delayed_work_sync(&di->irq_work);
+	idtp9220_free_irqs(di);
+	idtp9220_cancel_works(di);
+	if (di->sysfs_created) {
+		sysfs_remove_group(&client->dev.kobj, &sysfs_group_attrs);
+		di->sysfs_created = false;
+	}
+	idtp9220_put_power_supplies(di);
+	if (di->idtp_psy) {
+		power_supply_unregister(di->idtp_psy);
+		di->idtp_psy = NULL;
+	}
+	if (g_di == di)
+		g_di = NULL;
+	device_init_wakeup(&client->dev, false);
 	i2c_set_clientdata(client, NULL);
 
 	return ret;
@@ -2178,9 +2277,24 @@ static int idtp9220_remove(struct i2c_client *client)
 {
 	struct idtp9220_device_info *di = i2c_get_clientdata(client);
 
-	gpio_free(di->dt_props.enable_gpio);
-	cancel_delayed_work_sync(&di->irq_work);
+	if (!di)
+		return 0;
+
+	idtp9220_free_irqs(di);
+	idtp9220_cancel_works(di);
+	if (di->sysfs_created) {
+		sysfs_remove_group(&client->dev.kobj, &sysfs_group_attrs);
+		di->sysfs_created = false;
+	}
+	idtp9220_put_power_supplies(di);
+	if (di->idtp_psy) {
+		power_supply_unregister(di->idtp_psy);
+		di->idtp_psy = NULL;
+	}
+	device_init_wakeup(&client->dev, false);
 	i2c_set_clientdata(client, NULL);
+	if (g_di == di)
+		g_di = NULL;
 
 	return 0;
 }
