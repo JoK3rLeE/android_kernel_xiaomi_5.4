@@ -45,6 +45,10 @@
 #define __CHIPSET__ "SM8150 "
 #define MSM_DAILINK_NAME(name) (__CHIPSET__#name)
 
+#if defined(CONFIG_MACH_XIAOMI_CEPHEUS) && IS_ENABLED(CONFIG_SND_SOC_CS35L41)
+#define CS35L41_CODEC_NAME "cs35l41.0-0040"
+#endif
+
 #define SAMPLING_RATE_8KHZ      8000
 #define SAMPLING_RATE_11P025KHZ 11025
 #define SAMPLING_RATE_16KHZ     16000
@@ -6738,10 +6742,10 @@ static int msm_snd_card_tavil_late_probe(struct snd_soc_card *card)
 	struct snd_soc_component *component;
 	int ret = 0;
 	void *mbhc_calibration;
-#ifdef CONFIG_SND_SOC_CS35L41_FOR_CEPH
-	struct snd_soc_dai_link *dai_link;
-	struct snd_soc_codec *cs35l41_codec;
-	struct snd_soc_dapm_context * cs35l41_dapm;
+#if defined(CONFIG_MACH_XIAOMI_CEPHEUS) && IS_ENABLED(CONFIG_SND_SOC_CS35L41)
+	struct snd_soc_pcm_runtime *amp_rtd;
+	struct snd_soc_component *amp_component;
+	struct snd_soc_dapm_context *cs35l41_dapm;
 #endif
 
 	rtd = snd_soc_get_pcm_runtime(card, be_dl_name);
@@ -6773,13 +6777,17 @@ static int msm_snd_card_tavil_late_probe(struct snd_soc_card *card)
 		goto err_hs_detect;
 	}
 
-#ifdef CONFIG_SND_SOC_CS35L41_FOR_CEPH
-	dai_link = rtd->dai_link;
-	if (dai_link && dai_link->codec_name) {
-		if (!strcmp(dai_link->codec_name, CS35L41_CODEC_NAME)) {
-			dev_info(card->dev, "%s: found codec[%s]\n", __func__, CS35L41_CODEC_NAME);
-			cs35l41_codec = rtd->codec;
-			cs35l41_dapm = snd_soc_codec_get_dapm(cs35l41_codec);
+#if defined(CONFIG_MACH_XIAOMI_CEPHEUS) && IS_ENABLED(CONFIG_SND_SOC_CS35L41)
+	/*
+	 * The CS35L41 is the Cepheus QUAT MI2S backend, not the WCD934x
+	 * Slimbus runtime used above for headset detection.
+	 */
+	amp_rtd = snd_soc_get_pcm_runtime(card, LPASS_BE_QUAT_MI2S_RX);
+	if (amp_rtd) {
+		amp_component = snd_soc_rtdcom_lookup(amp_rtd,
+						      CS35L41_CODEC_NAME);
+		if (amp_component) {
+			cs35l41_dapm = snd_soc_component_get_dapm(amp_component);
 			snd_soc_dapm_ignore_suspend(cs35l41_dapm, "AMP Playback");
 			snd_soc_dapm_ignore_suspend(cs35l41_dapm, "AMP Capture");
 			snd_soc_dapm_ignore_suspend(cs35l41_dapm, "DSP1");
@@ -6790,7 +6798,11 @@ static int msm_snd_card_tavil_late_probe(struct snd_soc_card *card)
 			snd_soc_dapm_ignore_suspend(cs35l41_dapm, "ASPTX2");
 			snd_soc_dapm_ignore_suspend(cs35l41_dapm, "SPK");
 			snd_soc_dapm_sync(cs35l41_dapm);
+		} else {
+			dev_warn(card->dev, "CS35L41 component not found in QUAT MI2S runtime\n");
 		}
+	} else {
+		dev_warn(card->dev, "CS35L41 QUAT MI2S runtime not found\n");
 	}
 #endif
 
