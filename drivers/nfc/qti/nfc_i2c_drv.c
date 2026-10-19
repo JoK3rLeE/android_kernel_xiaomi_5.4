@@ -3,6 +3,7 @@
  * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
  */
 
+#include <linux/pinctrl/consumer.h>
 #include "nfc_common.h"
 
 /**
@@ -329,6 +330,31 @@ int nfc_i2c_dev_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		pr_err("%s: unable to request nfc clkreq gpio [%d]\n",
 		       __func__, nfc_gpio.clkreq);
 		goto err_free_dwl_req;
+	}
+
+	/*
+	 * Xiaomi SM8150 device trees may define explicit nfc_active/nfc_suspend
+	 * states rather than the conventional default state names. Select the
+	 * active state after GPIO setup so the NFC IRQ/CLKREQ pins receive their
+	 * board-defined electrical configuration before the controller is used.
+	 * Boards without these optional states remain supported.
+	 */
+	{
+		struct pinctrl *pctrl = devm_pinctrl_get(&client->dev);
+
+		if (!IS_ERR_OR_NULL(pctrl)) {
+			struct pinctrl_state *active =
+				pinctrl_lookup_state(pctrl, "nfc_active");
+
+			if (!IS_ERR_OR_NULL(active)) {
+				int pinctrl_ret = pinctrl_select_state(pctrl, active);
+
+				if (pinctrl_ret)
+					dev_warn(&client->dev,
+						 "failed to select nfc_active: %d\n",
+						 pinctrl_ret);
+			}
+		}
 	}
 
 	nfc_dev->gpio.ven = nfc_gpio.ven;
