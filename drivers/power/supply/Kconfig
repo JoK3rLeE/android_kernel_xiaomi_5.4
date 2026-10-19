@@ -725,6 +725,7 @@ config CHARGER_WILCO
 	  Documentation/ABI/testing/sysfs-class-power-wilco
 
 source "drivers/power/supply/qcom/Kconfig"
+source "drivers/power/supply/renesas/Kconfig"
 
 # Xiaomi
 source "drivers/power/supply/maxim/Kconfig"
