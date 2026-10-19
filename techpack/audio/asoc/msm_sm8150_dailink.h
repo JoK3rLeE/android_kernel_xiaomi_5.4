@@ -3,6 +3,7 @@
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
  */
 
+#include <linux/kconfig.h>
 #include <sound/soc.h>
 #ifdef CONFIG_SND_SOC_TFA9874_FOR_DAVI
 #include "codecs/tfa98xx/inc/tfa_platform_interface_definition.h"
