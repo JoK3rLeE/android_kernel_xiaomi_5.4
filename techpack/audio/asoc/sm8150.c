@@ -6577,6 +6577,24 @@ static struct snd_soc_dai_link quat_mi2s_rx_tfa9874_dai_links[] = {
 };
 #endif
 
+#if defined(CONFIG_MACH_XIAOMI_CEPHEUS) && IS_ENABLED(CONFIG_SND_SOC_CS35L41)
+static struct snd_soc_dai_link quat_mi2s_rx_cs35l41_dai_links[] = {
+	{
+		.name = LPASS_BE_QUAT_MI2S_RX,
+		.stream_name = "Quaternary MI2S Playback",
+		.dynamic_be = 1,
+		.no_pcm = 1,
+		.dpcm_playback = 1,
+		.id = MSM_BACKEND_DAI_QUATERNARY_MI2S_RX,
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ops = &msm_mi2s_be_ops,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		SND_SOC_DAILINK_REG(quat_mi2s_rx_cs35l41),
+	},
+};
+#endif
+
 static struct snd_soc_dai_link msm_auxpcm_be_dai_links[] = {
 	/* Primary AUX PCM Backend DAI Links */
 	{
@@ -6707,6 +6725,9 @@ static struct snd_soc_dai_link msm_tavil_dai_links[
 			 ARRAY_SIZE(msm_mi2s_be_dai_links) +
 #if defined(CONFIG_MACH_XIAOMI_SM8150) && !defined(CONFIG_MACH_XIAOMI_VAYU)
 			 ARRAY_SIZE(quat_mi2s_rx_tfa9874_dai_links) +
+#endif
+#if defined(CONFIG_MACH_XIAOMI_CEPHEUS) && IS_ENABLED(CONFIG_SND_SOC_CS35L41)
+			 ARRAY_SIZE(quat_mi2s_rx_cs35l41_dai_links) +
 #endif
 			 ARRAY_SIZE(msm_auxpcm_be_dai_links)];
 
@@ -7140,6 +7161,13 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 					quat_mi2s_rx_tfa9874_dai_links,
 					sizeof(quat_mi2s_rx_tfa9874_dai_links));
 				total_links += ARRAY_SIZE(quat_mi2s_rx_tfa9874_dai_links);
+#if defined(CONFIG_MACH_XIAOMI_CEPHEUS) && IS_ENABLED(CONFIG_SND_SOC_CS35L41)
+			} else if (get_hw_version_platform() == HARDWARE_PLATFORM_CEPHEUS) {
+				memcpy(msm_tavil_dai_links + total_links,
+					quat_mi2s_rx_cs35l41_dai_links,
+					sizeof(quat_mi2s_rx_cs35l41_dai_links));
+				total_links += ARRAY_SIZE(quat_mi2s_rx_cs35l41_dai_links);
+#endif
 			}
 #endif
 		}
