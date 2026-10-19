@@ -434,4 +434,10 @@ config MACH_XIAOMI_RAPHAEL
 	help
 	  Support for Redmi K20 Pro/Mi 9T Pro
 
+config MACH_XIAOMI_CEPHEUS
+	bool "Xiaomi cepheus board"
+	select MACH_XIAOMI_SM8150
+	help
+	  Support for Xiaomi Mi 9 (cepheus)
+
 endmenu
