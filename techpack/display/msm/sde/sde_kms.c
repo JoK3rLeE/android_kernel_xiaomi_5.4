@@ -1002,8 +1002,9 @@ static void _sde_kms_drm_check_dpms(struct drm_atomic_state *old_state,
 				 * touchscreen drivers while they migrate to the
 				 * per-panel drm_panel notifier API.
 				 */
+				/* Refresh-rate changes are not blank transitions. */
 				if (legacy_mode == DRM_PANEL_BLANK_FPS_CHANGE)
-					legacy_mode = old_mode;
+					continue;
 
 				switch (legacy_mode) {
 				case DRM_PANEL_BLANK_UNBLANK:
