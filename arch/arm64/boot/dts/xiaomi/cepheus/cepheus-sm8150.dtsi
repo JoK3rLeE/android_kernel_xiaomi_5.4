@@ -4,6 +4,9 @@ And public attribution of xiaomi platforms(like F1 and so and)
 */
 #include "cepheus-pinctrl.dtsi"
 #include "../common/xiaomi-sm8150-common.dtsi"
+#include "display/dsi-panel-samsung-fhd-ea8076-f1mp-cmd.dtsi"
+#include "display/dsi-panel-samsung-fhd-ea8076-f1p2-2-cmd.dtsi"
+#include "display/dsi-panel-samsung-fhd-ea8076-f1p2-cmd.dtsi"
 #include "cepheus-sm8150-camera-sensor-mtp.dtsi"
 
 #include "../common/smb1390.dtsi"
