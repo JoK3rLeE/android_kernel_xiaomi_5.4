@@ -12,6 +12,14 @@ menuconfig INPUT_TOUCHSCREEN
 
 if INPUT_TOUCHSCREEN
 
+config TOUCHSCREEN_COMMON
+	bool "Xiaomi touchscreen common sysfs interface"
+	depends on INPUT
+	help
+	  Provide the shared /sys/touchpanel interface used by Xiaomi
+	  touchscreen drivers for gesture, fingerprint and key state nodes.
+
+
 config TOUCHSCREEN_PROPERTIES
 	def_tristate INPUT
 	depends on INPUT
