@@ -2267,7 +2267,7 @@ static int smb5_wireless_set_prop(struct power_supply *psy,
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_WIRELESS_VERSION:
-		dev_info(chg->dev, "set version=%d\\n", val->intval);
+		dev_info(chg->dev, "set version=%d\n", val->intval);
 		return 0;
 	case POWER_SUPPLY_PROP_WIRELESS_WAKELOCK:
 		return smblib_set_prop_wireless_wakelock(chg, val);
