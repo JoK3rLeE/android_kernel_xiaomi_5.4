@@ -13,10 +13,10 @@ Port the hardware integration, not just the 4.14 config symbols. For each device
 | Feature | 4.14 Cepheus config / implementation clue | 5.4 baseline status | Required action |
 |---|---|---|---|
 | Platform identity | `CONFIG_MACH_XIAOMI_CEPHEUS=y` | Raphael-oriented device tree/config is present; Cepheus device integration is not | Port Cepheus board DTS/DTSI and overlays; don't rename Raphael nodes to Cepheus mechanically |
-| Touchscreen | `CONFIG_TOUCHSCREEN_ST_FTS_V521`, FOD area report, secure touch, I2C DMA, touchscreen-common | The target tree has Goodix touchscreen integration; no matching Xiaomi FTS V521 driver path was found in the inspected tree | Port the FTS V521 driver and its Kconfig/Makefile dependencies, then port the DT node and gesture/FOD ABI. Do not enable the symbol until the driver exists and builds |
+| Touchscreen | `CONFIG_TOUCHSCREEN_ST_FTS_V521`, FOD area report, touchscreen-common | FTS V521 driver and its Kconfig/Makefile integration are now present. The 5.4 DRM stack uses `drm_panel_notifier`, while the imported driver expects the legacy MSM notifier ABI | Audit FTS API compatibility and build. A legacy notifier shim now bridges SDE blank events; verify suspend/resume and gesture behavior on device |
 | Smart amplifier | `CONFIG_SND_SOC_CS35L41=y`, `CONFIG_MSM_CSPL=y` | No matching CS35L41 codec driver path found in the inspected target tree | Port codec driver plus CSPL/firmware interface and machine-card/DT integration; verify speaker routing and calibration |
 | Camera actuator | `CONFIG_VCM_AK7374=y` | No matching AK7374 driver path found in the inspected target tree | Port actuator driver, camera sensor/actuator registration, power sequencing and camera DT entries |
-| Wireless charging | `CONFIG_IDT_P9220=y` | No matching IDT P9220 driver path found in the inspected target tree | Port receiver driver and DT/I2C integration; verify IRQ, GPIO, regulator and wireless-charging userspace ABI |
+| Wireless charging | `CONFIG_IDT_P9220=y` | IDT P9220 driver plus Kconfig/Makefile integration have been added | Audit driver API compatibility and add/verify the Cepheus I2C node, IRQ/GPIO wiring and wireless-charging userspace ABI |
 | SMB1390 charge pump | Shared SM8150 config enables `CONFIG_SMB1390_CHARGE_PUMP=y` | Both class-based and PSY-oriented integrations exist in the 5.4 tree; Raphael has a device-specific PSY/IIO adaptation | Preserve the Cepheus charging topology and userspace ABI. Do not copy Raphael's PSY conversion or its voltage/charge-pump policy without checking Cepheus DT and userspace expectations |
 | Shared SM8150 hardware | Fingerprint, haptics, IR, proximity, simtray, speaker ID, Trusty, NFC and QCACLD options in common config | Many shared drivers/config options already exist in the 5.4 common fragment | Reconcile each option against Cepheus DT and the ROM/vendor stack; only shared silicon/platform features should remain common |
 | Display | EA8076 Samsung AMOLED family and Cepheus panel timings | Target DTS tree is Raphael-oriented | Port Cepheus panel description, command sets, reset/TE GPIOs, regulators, timing and display integration as a separate validated unit |
@@ -25,13 +25,19 @@ Port the hardware integration, not just the 4.14 config symbols. For each device
 ## Port order
 
 1. Establish Cepheus board DTS/DTSI and overlay build integration.
-2. Port the FTS V521 touchscreen driver and preserve its expected gesture/FOD sysfs/input ABI.
+2. Audit the imported FTS V521 driver against 5.4 APIs, preserve its gesture/FOD sysfs/input ABI, and validate the new DRM notifier compatibility bridge.
 3. Port the CS35L41 + CSPL audio stack and machine-card integration.
 4. Port AK7374 actuator integration with Cepheus camera sensor descriptions.
-5. Port IDT P9220 wireless charging and verify the charging topology.
+5. Audit the imported IDT P9220 driver and verify the Cepheus wireless-charging topology.
 6. Reconcile SMB1390/SMB5/FG integration against Cepheus DT and the ROM's `hvdcp_opti` expectations.
 7. Port display, sensors, battery data, NFC and remaining board-specific nodes.
 8. Build after each subsystem, then validate boot and hardware behavior on device.
+
+## Current audit findings
+
+- The imported FTS V521 source still contains the 4.14-era `linux/msm_drm_notify.h` dependency. The 5.4 display stack instead exposes `drm_panel_notifier`; a compatibility header, blocking notifier chain, and SDE event bridge have been added so the legacy touchscreen callback can receive blank events. This has not yet been compile-validated.
+- `CONFIG_TOUCHSCREEN_COMMON` was referenced by the Cepheus config and touchscreen Makefile but had no Kconfig definition. A boolean Kconfig entry has now been added so the common touch sysfs interface can actually be enabled.
+- The CS35L41/CSPL audio stack and AK7374 actuator remain unported; their config symbols are disabled until driver and build integration exist.
 
 ## Configuration safety
 
