@@ -4664,7 +4664,8 @@ static struct sde_hw_dim_layer* sde_crtc_setup_fod_dim_layer(
 		goto error;
 	}
 
-	layer_stage = SDE_STAGE_0 + stage;
+	layer_stage = kms->catalog->has_base_layer ?
+		stage : SDE_STAGE_0 + stage;
 	if (layer_stage >= kms->catalog->mixer[0].sblk->maxblendstages) {
 		SDE_ERROR("Stage too large %u vs max %u\n", layer_stage,
 			kms->catalog->mixer[0].sblk->maxblendstages);
@@ -4704,30 +4705,56 @@ error:
 	return dim_layer;
 }
 
-static void sde_crtc_fod_atomic_check(struct sde_crtc_state *cstate,
+static int sde_crtc_fod_atomic_check(struct sde_crtc_state *cstate,
 		struct plane_state *pstates, int cnt)
 {
+	struct sde_kms *kms;
 	uint32_t dim_layer_stage;
 	int plane_idx;
+
+	cstate->fod_dim_layer = NULL;
 
 	for (plane_idx = 0; plane_idx < cnt; plane_idx++)
 		if (sde_plane_is_fod_layer(pstates[plane_idx].drm_pstate))
 			break;
 
-	if (plane_idx == cnt) {
+	if (plane_idx == cnt)
+		return 0;
+
+	/*
+	 * Run after _sde_crtc_check_zpos(): its normalization can compress
+	 * the stage gap reserved before zpos assignment. Insert the FOD
+	 * dim layer into the final hardware stage ordering instead.
+	 */
+	dim_layer_stage = pstates[plane_idx].stage;
+	cstate->fod_dim_layer = sde_crtc_setup_fod_dim_layer(cstate,
+			dim_layer_stage);
+	if (!cstate->fod_dim_layer)
+		return 0;
+
+	kms = _sde_crtc_get_kms(&cstate->base);
+	if (!kms || !kms->catalog) {
 		cstate->fod_dim_layer = NULL;
-	} else {
-		dim_layer_stage = pstates[plane_idx].stage;
-		cstate->fod_dim_layer = sde_crtc_setup_fod_dim_layer(cstate,
-				dim_layer_stage);
+		return -EINVAL;
 	}
 
-	if (!cstate->fod_dim_layer)
-		return;
+	for (plane_idx = 0; plane_idx < cnt; plane_idx++) {
+		if (pstates[plane_idx].stage < dim_layer_stage)
+			continue;
 
-	for (plane_idx = 0; plane_idx < cnt; plane_idx++)
-		if (pstates[plane_idx].stage >= dim_layer_stage)
-			pstates[plane_idx].stage++;
+		/* Leave one hardware blend stage available for the FOD layer. */
+		if (pstates[plane_idx].stage >=
+				SDE_STAGE_MAX - SDE_STAGE_0 - 1) {
+			SDE_ERROR("no blend stage available for FOD dim layer\n");
+			cstate->fod_dim_layer = NULL;
+			return -EINVAL;
+		}
+
+		pstates[plane_idx].stage++;
+		pstates[plane_idx].sde_pstate->stage++;
+	}
+
+	return 0;
 }
 
 static int _sde_crtc_check_secure_conn(struct drm_crtc *crtc,
@@ -5051,10 +5078,12 @@ static int _sde_crtc_atomic_check_pstates(struct drm_crtc *crtc,
 	if (rc)
 		return rc;
 
-	sde_crtc_fod_atomic_check(cstate, pstates, cnt);
-
 	/* assign mixer stages based on sorted zpos property */
 	rc = _sde_crtc_check_zpos(state, sde_crtc, pstates, cstate, mode, cnt);
+	if (rc)
+		return rc;
+
+	rc = sde_crtc_fod_atomic_check(cstate, pstates, cnt);
 	if (rc)
 		return rc;
 
