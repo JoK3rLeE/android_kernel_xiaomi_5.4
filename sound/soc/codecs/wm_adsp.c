@@ -357,8 +357,10 @@ static void wm_adsp_buf_free(struct list_head *list)
 #define WM_ADSP_FW_TRACE    8
 #define WM_ADSP_FW_SPK_PROT 9
 #define WM_ADSP_FW_MISC     10
+#define WM_ADSP_FW_DIAG     11
+#define WM_ADSP_FW_CALIB    12
 
-#define WM_ADSP_NUM_FW      11
+#define WM_ADSP_NUM_FW      13
 
 static const char *wm_adsp_fw_text[WM_ADSP_NUM_FW] = {
 	[WM_ADSP_FW_MBC_VSS] =  "MBC/VSS",
@@ -372,6 +374,8 @@ static const char *wm_adsp_fw_text[WM_ADSP_NUM_FW] = {
 	[WM_ADSP_FW_TRACE] =    "Dbg Trace",
 	[WM_ADSP_FW_SPK_PROT] = "Protection",
 	[WM_ADSP_FW_MISC] =     "Misc",
+	[WM_ADSP_FW_DIAG] =     "Diag",
+	[WM_ADSP_FW_CALIB] =    "Diag Z",
 };
 
 struct wm_adsp_system_config_xm_hdr {
@@ -588,6 +592,8 @@ static const struct {
 	},
 	[WM_ADSP_FW_SPK_PROT] = { .file = "spk-prot" },
 	[WM_ADSP_FW_MISC] =     { .file = "misc" },
+	[WM_ADSP_FW_DIAG] =     { .file = "diag" },
+	[WM_ADSP_FW_CALIB] =    { .file = "diag-z" },
 };
 
 struct wm_coeff_ctl_ops {
@@ -3287,16 +3293,31 @@ static void wm_halo_set_calibration_control(struct wm_adsp *dsp,
 
 static void wm_halo_apply_calibration(struct wm_adsp *dsp)
 {
-	/* Firmware index 9 is WM_ADSP_FW_SPK_PROT in the MiCode Q source. */
-	if (dsp->fw != 9)
-		return;
-
-	wm_halo_set_calibration_control(dsp, "DSP1X Protection cd CAL_R",
-					dsp->cal_z);
-	wm_halo_set_calibration_control(dsp, "DSP1X Protection cd CAL_STATUS",
-					dsp->cal_status);
-	wm_halo_set_calibration_control(dsp, "DSP1X Protection cd CAL_CHECKSUM",
-					dsp->cal_chksum);
+	switch (dsp->fw) {
+	case WM_ADSP_FW_SPK_PROT:
+		wm_halo_set_calibration_control(dsp,
+						"DSP1X Protection cd CAL_R",
+						dsp->cal_z);
+		wm_halo_set_calibration_control(dsp,
+						"DSP1X Protection cd CAL_STATUS",
+						dsp->cal_status);
+		wm_halo_set_calibration_control(dsp,
+						"DSP1X Protection cd CAL_CHECKSUM",
+						dsp->cal_chksum);
+		break;
+	case WM_ADSP_FW_DIAG:
+		wm_halo_set_calibration_control(dsp,
+						"DSP1X Diag cd CAL_AMBIENT",
+						dsp->ambient);
+		break;
+	case WM_ADSP_FW_CALIB:
+		wm_halo_set_calibration_control(dsp,
+						"DSP1X Diag Z cd CAL_AMBIENT",
+						dsp->ambient);
+		break;
+	default:
+		break;
+	}
 }
 
 int wm_halo_event(struct snd_soc_dapm_widget *w,
