@@ -12,13 +12,16 @@
 #include <video/mipi_display.h>
 
 #include "dsi_panel.h"
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+#include "exposure_adjustment.h"
+#endif
 #include "dsi_ctrl_hw.h"
 #include "dsi_parser.h"
 #include "sde_dbg.h"
 #include "sde_dsc_helper.h"
 #include "sde_vdc_helper.h"
 
-#if defined(CONFIG_MACH_XIAOMI_SM8150)
+#if defined(CONFIG_MACH_XIAOMI_SM8150) || defined(CONFIG_EXPOSURE_ADJUSTMENT)
 #include "dsi_display.h"
 #endif
 
@@ -722,7 +725,8 @@ u32 dsi_panel_get_fod_dim_alpha(struct dsi_panel *panel)
 	u32 brightness = dsi_panel_get_backlight(panel);
 	int i;
 
-	if (!panel->fod_dim_lut || !panel->fod_dim_lut_count)
+	if (panel->hbm_requested ||
+			!panel->fod_dim_lut || !panel->fod_dim_lut_count)
 		return 0;
 
 	for (i = 0; i < panel->fod_dim_lut_count; i++)
@@ -749,19 +753,42 @@ int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
 
 	if (!panel || !panel->cur_mode || !panel->cur_mode->priv_info)
 		return -EINVAL;
+	if (panel->hbm_requested)
+		return -EBUSY;
 	if (!panel->cur_mode->priv_info->cmd_sets[type].count)
 		return -EOPNOTSUPP;
 
 	if (status) {
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+		if (ea_panel_is_enabled() && !panel->resend_ea) {
+			ea_panel_mode_ctrl(panel, false);
+			panel->resend_ea = true;
+		}
+#endif
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_HBM_FOD_ON);
-		if (rc)
+		if (rc) {
 			pr_err("[%s] failed to send DSI_CMD_SET_DISP_HBM_FOD_ON cmd, rc=%d\n",
 					panel->name, rc);
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+			if (panel->resend_ea) {
+				ea_panel_mode_ctrl(panel, true);
+				panel->resend_ea = false;
+			}
+#endif
+		}
 	} else {
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_HBM_FOD_OFF);
-		if (rc)
+		if (rc) {
 			pr_err("[%s] failed to send DSI_CMD_SET_DISP_HBM_FOD_OFF cmd, rc=%d\n",
 					panel->name, rc);
+		} else {
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+			if (panel->resend_ea) {
+				ea_panel_mode_ctrl(panel, true);
+				panel->resend_ea = false;
+			}
+#endif
+		}
 	}
 
 	return rc;
@@ -785,18 +812,42 @@ int dsi_panel_set_hbm(struct dsi_panel *panel, bool enable)
 		return -EOPNOTSUPP;
 
 	if (!panel->panel_initialized) {
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+		if (!enable && panel->resend_ea_hbm) {
+			ea_panel_mode_ctrl(panel, true);
+			panel->resend_ea_hbm = false;
+		}
+#endif
 		panel->hbm_requested = enable;
 		return 0;
 	}
 
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+	if (enable && ea_panel_is_enabled() && !panel->resend_ea_hbm) {
+		ea_panel_mode_ctrl(panel, false);
+		panel->resend_ea_hbm = true;
+	}
+#endif
 	rc = dsi_panel_tx_cmd_set(panel, type);
 	if (rc) {
 		pr_err("[%s] failed to send manual HBM %s command, rc=%d\n",
 			panel->name, enable ? "on" : "off", rc);
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+		if (enable && panel->resend_ea_hbm) {
+			ea_panel_mode_ctrl(panel, true);
+			panel->resend_ea_hbm = false;
+		}
+#endif
 		return rc;
 	}
 
 	panel->hbm_requested = enable;
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+	if (!enable && panel->resend_ea_hbm) {
+		ea_panel_mode_ctrl(panel, true);
+		panel->resend_ea_hbm = false;
+	}
+#endif
 	return 0;
 }
 
@@ -804,6 +855,9 @@ int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 {
 	int rc = 0;
 	struct dsi_backlight_config *bl = &panel->bl_config;
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+	u32 bl_dc_min = bl->bl_min_level * 2;
+#endif
 #if defined(CONFIG_MACH_XIAOMI_SM8150)
 	u32 last_backlight = dsi_panel_get_backlight(panel);
 #endif
@@ -812,6 +866,11 @@ int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 		return 0;
 
 	DSI_DEBUG("backlight type:%d lvl:%d\n", bl->type, bl_lvl);
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+	if (bl_lvl > 0)
+		bl_lvl = ea_panel_calc_backlight(panel,
+			bl_lvl < bl_dc_min ? bl_dc_min : bl_lvl);
+#endif
 	switch (bl->type) {
 	case DSI_BACKLIGHT_WLED:
 		rc = backlight_device_set_brightness(bl->raw_bd, bl_lvl);
