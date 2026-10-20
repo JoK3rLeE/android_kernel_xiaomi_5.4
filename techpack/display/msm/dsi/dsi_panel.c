@@ -807,12 +807,16 @@ int dsi_panel_set_hbm(struct dsi_panel *panel, bool enable)
 	int rc;
 #ifdef CONFIG_EXPOSURE_ADJUSTMENT
 	bool ea_disabled = false;
+	bool was_requested;
 #endif
 	enum dsi_cmd_set_type type = enable ?
 		DSI_CMD_SET_DISP_HBM_ON : DSI_CMD_SET_DISP_HBM_OFF;
 
 	if (!panel)
 		return -EINVAL;
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+	was_requested = panel->hbm_requested;
+#endif
 
 	if (panel->cur_mode && panel->cur_mode->priv_info &&
 			!panel->cur_mode->priv_info->cmd_sets[type].count)
@@ -841,7 +845,7 @@ int dsi_panel_set_hbm(struct dsi_panel *panel, bool enable)
 		pr_err("[%s] failed to send manual HBM %s command, rc=%d\n",
 			panel->name, enable ? "on" : "off", rc);
 #ifdef CONFIG_EXPOSURE_ADJUSTMENT
-		if (ea_disabled) {
+		if (ea_disabled && !was_requested) {
 			ea_panel_mode_ctrl(panel, true);
 			panel->resend_ea_hbm = false;
 		}
