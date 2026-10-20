@@ -722,7 +722,7 @@ u32 dsi_panel_get_fod_dim_alpha(struct dsi_panel *panel)
 	u32 brightness = dsi_panel_get_backlight(panel);
 	int i;
 
-	if (!panel->fod_dim_lut)
+	if (!panel->fod_dim_lut || !panel->fod_dim_lut_count)
 		return 0;
 
 	for (i = 0; i < panel->fod_dim_lut_count; i++)
@@ -2579,6 +2579,27 @@ static int dsi_panel_parse_fod_dim_lut(struct dsi_panel *panel,
 	}
 
 	count = len / BRIGHTNESS_ALPHA_PAIR_LEN;
+
+	/*
+	 * Interpolation requires distinct, ascending brightness points and
+	 * non-increasing 8-bit alpha values. Reject malformed DT data here
+	 * rather than risking division by zero or unsigned underflow later.
+	 */
+	for (i = 0; i < count; i++) {
+		u32 brightness = array[i * BRIGHTNESS_ALPHA_PAIR_LEN];
+		u32 alpha = array[i * BRIGHTNESS_ALPHA_PAIR_LEN + 1];
+
+		if (alpha > 0xff ||
+			(i && (brightness <=
+			 array[(i - 1) * BRIGHTNESS_ALPHA_PAIR_LEN] ||
+			 alpha > array[(i - 1) * BRIGHTNESS_ALPHA_PAIR_LEN + 1]))) {
+			pr_err("[%s] invalid FOD dim LUT pair %d\n",
+				panel->name, i);
+			rc = -EINVAL;
+			goto read_fail;
+		}
+	}
+
 	lut = kcalloc(count, sizeof(*lut), GFP_KERNEL);
 	if (!lut) {
 		rc = -ENOMEM;
