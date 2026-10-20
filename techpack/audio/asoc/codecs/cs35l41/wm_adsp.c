@@ -4292,6 +4292,12 @@ void wm_adsp2_remove(struct wm_adsp *dsp)
 {
 	struct wm_coeff_ctl *ctl;
 
+	/*
+	 * DAPM can queue firmware boot work. Wait for it to finish before
+	 * freeing controls and rate caches that the worker may still access.
+	 */
+	cancel_work_sync(&dsp->boot_work);
+
 	while (!list_empty(&dsp->ctl_list)) {
 		ctl = list_first_entry(&dsp->ctl_list, struct wm_coeff_ctl,
 				       list);
