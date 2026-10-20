@@ -5804,6 +5804,7 @@ static ssize_t sysfs_hbm_write(struct device *dev,
 {
 	struct dsi_display *display;
 	bool enable;
+	bool need_fod_off;
 	int rc, clk_rc;
 
 	display = dev_get_drvdata(dev);
@@ -5838,8 +5839,11 @@ static ssize_t sysfs_hbm_write(struct device *dev,
 	}
 
 	/* FOD HBM and manual HBM are mutually exclusive panel modes. */
-	if (enable && (atomic_read(&display->fod_ui) ||
-			display->panel->resend_ea)) {
+	need_fod_off = atomic_read(&display->fod_ui);
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+	need_fod_off = need_fod_off || display->panel->resend_ea;
+#endif
+	if (enable && need_fod_off) {
 		rc = dsi_panel_set_fod_hbm(display->panel, false);
 		if (rc) {
 			pr_err("hbm: failed to clear FOD HBM before manual HBM: %d\n",
