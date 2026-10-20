@@ -44,9 +44,6 @@
 
 #include "wm_adsp.h"
 
-static const struct snd_kcontrol_new cs35l41_fw_controls[] = {
-	WM_ADSP_FW_CONTROL("DSP1", 0),
-};
 #include "cs35l41.h"
 #include <sound/cs35l41.h>
 
@@ -1556,14 +1553,6 @@ static int cs35l41_codec_probe(struct snd_soc_component *codec)
 	ret = wm_adsp2_component_probe(&cs35l41->dsp, codec);
 	if (ret < 0)
 		return ret;
-
-	ret = snd_soc_add_component_controls(codec, cs35l41_fw_controls,
-					    ARRAY_SIZE(cs35l41_fw_controls));
-	if (ret < 0) {
-		wm_adsp2_component_remove(&cs35l41->dsp, codec);
-		cs35l41->component = NULL;
-		return ret;
-	}
 
 	snd_soc_dapm_ignore_suspend(dapm, "AMP Playback");
 	snd_soc_dapm_ignore_suspend(dapm, "AMP Capture");
