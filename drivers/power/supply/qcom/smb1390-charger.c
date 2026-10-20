@@ -1138,6 +1138,7 @@ static int smb1390_probe(struct platform_device *pdev)
 		goto out_class;
 	}
 
+	platform_set_drvdata(pdev, chip);
 	pr_info("smb1390 probed successfully");
 	return 0;
 
