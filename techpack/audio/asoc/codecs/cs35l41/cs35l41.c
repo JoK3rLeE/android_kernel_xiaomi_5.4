@@ -12,7 +12,6 @@
  * published by the Free Software Foundation.
  *
  */
-#define DEBUG 1
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/version.h>
@@ -2007,7 +2006,7 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 	int irq_pol = 0;
 	bool supplies_enabled = false;
 
-	dev_info(cs35l41->dev, "cs35l41 proble\n");
+	dev_dbg(cs35l41->dev, "Starting CS35L41 probe\n");
 
 	/* Default to RESUME cmd */
 	cs35l41->cspl_cmd = (unsigned int)CSPL_MBOX_CMD_RESUME;
