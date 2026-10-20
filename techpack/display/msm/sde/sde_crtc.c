@@ -4683,6 +4683,10 @@ static struct sde_hw_dim_layer* sde_crtc_setup_fod_dim_layer(
 	}
 
 	mutex_lock(&display->panel->panel_lock);
+	if (display->panel->hbm_requested) {
+		mutex_unlock(&display->panel->panel_lock);
+		goto error;
+	}
 	alpha = dsi_panel_get_fod_dim_alpha(display->panel);
 	mutex_unlock(&display->panel->panel_lock);
 
