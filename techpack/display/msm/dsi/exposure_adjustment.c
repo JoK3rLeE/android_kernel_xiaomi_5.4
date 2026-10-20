@@ -130,7 +130,9 @@ u32 ea_panel_calc_backlight(struct dsi_panel *panel, u32 bl_lvl)
 		rc = ea_panel_send_pcc(panel, bl_lvl);
 		if (rc) {
 			pr_debug("exposure adjustment: low-brightness PCC update failed\n");
-			return requested;
+			/* Keep the previous corrected backlight if PCC is stale. */
+			return READ_ONCE(pcc_correction_active) ?
+				ELVSS_OFF_THRESHOLD : requested;
 		}
 		WRITE_ONCE(pcc_correction_active, true);
 		return ELVSS_OFF_THRESHOLD;
@@ -141,9 +143,10 @@ u32 ea_panel_calc_backlight(struct dsi_panel *panel, u32 bl_lvl)
 		rc = ea_panel_send_pcc(panel, ELVSS_OFF_THRESHOLD);
 		if (rc) {
 			pr_debug("exposure adjustment: PCC reset failed, rc=%d\n", rc);
-		} else {
-			WRITE_ONCE(pcc_correction_active, false);
+			/* Don't pair a stale low PCC coefficient with high backlight. */
+			return ELVSS_OFF_THRESHOLD;
 		}
+		WRITE_ONCE(pcc_correction_active, false);
 	}
 
 	return bl_lvl;
