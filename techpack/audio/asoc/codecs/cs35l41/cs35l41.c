@@ -503,7 +503,7 @@ static int cs35l41_otp_unpack(void *data)
 	otp_map_match = cs35l41_find_otp_map(otp_id_reg);
 
 	if (otp_map_match == NULL) {
-		dev_err(cs35l41->dev, "OTP Map matching ID %d not found\n",
+		dev_err(cs35l41->dev, "OTP Map matching ID %u not found\n",
 			otp_id_reg);
 		return -EINVAL;
 	}
