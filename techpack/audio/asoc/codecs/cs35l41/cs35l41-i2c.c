@@ -109,7 +109,7 @@ static int cs35l41_i2c_remove(struct i2c_client *client)
 					   bank * CS35L41_REGSTRIDE, 0xFFFFFFFF);
 			if (ret < 0)
 				dev_warn(cs35l41->dev,
-					 "Failed to mask IRQ group %u bank %u during removal: %d\\n",
+					 "Failed to mask IRQ group %u bank %u during removal: %d\n",
 					 i + 1, bank + 1, ret);
 		}
 	}
@@ -120,7 +120,7 @@ static int cs35l41_i2c_remove(struct i2c_client *client)
 	ret = regulator_bulk_disable(cs35l41->num_supplies, cs35l41->supplies);
 	if (ret < 0)
 		dev_err(cs35l41->dev,
-			"Failed to disable supplies during removal: %d\\n", ret);
+			"Failed to disable supplies during removal: %d\n", ret);
 
 	return 0;
 }
