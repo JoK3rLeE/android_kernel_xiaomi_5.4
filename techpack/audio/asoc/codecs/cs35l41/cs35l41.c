@@ -890,11 +890,19 @@ static int cs35l41_main_amp_event(struct snd_soc_dapm_widget *w,
 	return ret;
 
 rollback_power_up:
-	regmap_update_bits(cs35l41->regmap, CS35L41_PWR_CTRL1,
-			   CS35L41_GLOBAL_EN_MASK, 0);
+	tmp = regmap_update_bits(cs35l41->regmap, CS35L41_PWR_CTRL1,
+				 CS35L41_GLOBAL_EN_MASK, 0);
+	if (tmp)
+		dev_err(cs35l41->dev,
+			"Failed to disable global power during rollback: %d\n", tmp);
 	usleep_range(1000, 1100);
-	regmap_multi_reg_write_bypassed(cs35l41->regmap, cs35l41_pdn_patch,
-					ARRAY_SIZE(cs35l41_pdn_patch));
+	tmp = regmap_multi_reg_write_bypassed(cs35l41->regmap,
+					      cs35l41_pdn_patch,
+					      ARRAY_SIZE(cs35l41_pdn_patch));
+	if (tmp)
+		dev_err(cs35l41->dev,
+			"Failed to apply power-down patch during rollback: %d\n",
+			tmp);
 	return ret;
 }
 
