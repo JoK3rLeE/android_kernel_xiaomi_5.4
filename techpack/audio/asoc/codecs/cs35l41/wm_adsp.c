@@ -3469,6 +3469,7 @@ static int wm_halo_configure_mpu(struct wm_adsp *dsp)
 
 	if (!xm_bank_sz) {
 		adsp_err(dsp, "Failed to configure MPU (XM_BANK_SIZE = 0)\n");
+		ret = -EINVAL;
 		goto err;
 	}
 
@@ -3481,6 +3482,7 @@ static int wm_halo_configure_mpu(struct wm_adsp *dsp)
 
 	if (!ym_bank_sz) {
 		adsp_err(dsp, "Failed to configure MPU (YM_BANK_SIZE = 0)\n");
+		ret = -EINVAL;
 		goto err;
 	}
 
