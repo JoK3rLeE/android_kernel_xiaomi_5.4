@@ -105,6 +105,12 @@ struct wm_adsp {
 	unsigned int n_rx_rates;
 	unsigned int n_tx_rates;
 
+	/* Xiaomi CS35L41 speaker-protection calibration defaults/state. */
+	u32 cal_z;
+	u32 ambient;
+	u32 cal_status;
+	u32 cal_chksum;
+
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_root;
 	char *wmfw_file_name;
