@@ -603,7 +603,7 @@ static int cs35l41_otp_unpack(void *data)
 	return 0;
 }
 
-#define _expr do { \
+#define CS35L41_IRQ_REGMAP(_expr) do { \
 	ret = (_expr); \
 	if (ret) \
 		dev_err(cs35l41->dev, "IRQ register operation failed: %d\n", ret); \
