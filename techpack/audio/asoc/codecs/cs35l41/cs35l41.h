@@ -785,7 +785,7 @@ struct cs35l41_private {
 	struct completion global_pup_done;
 	struct completion mbox_cmd;
 	unsigned int num_supplies;
-	unsigned int irq;
+	int irq;
 	int reset_gpio;
 	bool bus_spi;
 	bool halo_booted;
