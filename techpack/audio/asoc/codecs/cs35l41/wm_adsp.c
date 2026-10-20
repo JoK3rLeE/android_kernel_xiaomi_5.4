@@ -4122,7 +4122,15 @@ int wm_halo_init(struct wm_adsp *dsp)
 	mutex_init(&dsp->pwr_lock);
 
 	dsp->rx_rate_cache = kcalloc(dsp->n_rx_rates, sizeof(u8), GFP_KERNEL);
+	if (!dsp->rx_rate_cache)
+		return -ENOMEM;
+
 	dsp->tx_rate_cache = kcalloc(dsp->n_tx_rates, sizeof(u8), GFP_KERNEL);
+	if (!dsp->tx_rate_cache) {
+		kfree(dsp->rx_rate_cache);
+		dsp->rx_rate_cache = NULL;
+		return -ENOMEM;
+	}
 
 	dsp->ambient = AMBIENT_DEFAULT;
 	dsp->cal_z = CAL_R_DEFAULT;
