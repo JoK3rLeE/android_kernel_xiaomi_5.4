@@ -3255,12 +3255,68 @@ err:
 EXPORT_SYMBOL_GPL(wm_adsp_event);
 
 /*
- * Preserve the CS35L41 HALO widget ABI while routing the power-up/down
- * sequence through the component-based implementation used by this kernel.
+ * MiCode's CS35L41 driver writes speaker-protection calibration values into
+ * the firmware controls before the DSP is started. The 5.4 WM ADSP core owns
+ * the control cache, so update that cache here and let wm_adsp_event() perform
+ * the normal synchronized write as part of power-up.
  */
+static void wm_halo_set_calibration_control(struct wm_adsp *dsp,
+					    const char *name, u32 value)
+{
+	struct wm_coeff_ctl *ctl;
+	__be32 be_value = cpu_to_be32(value);
+
+	list_for_each_entry(ctl, &dsp->ctl_list, list) {
+		if (strcmp(ctl->name, name))
+			continue;
+
+		if (ctl->len < sizeof(be_value)) {
+			adsp_warn(dsp, "Calibration control %s is too small\\n",
+				  name);
+			return;
+		}
+
+		memcpy(ctl->cache, &be_value, sizeof(be_value));
+		ctl->set = 1;
+		return;
+	}
+
+	adsp_dbg(dsp, "Calibration control %s is not present in this firmware\\n",
+		 name);
+}
+
+static void wm_halo_apply_calibration(struct wm_adsp *dsp)
+{
+	/* Firmware index 9 is WM_ADSP_FW_SPK_PROT in the MiCode Q source. */
+	if (dsp->fw != 9)
+		return;
+
+	wm_halo_set_calibration_control(dsp, "DSP1X Protection cd CAL_R",
+					dsp->cal_z);
+	wm_halo_set_calibration_control(dsp, "DSP1X Protection cd CAL_STATUS",
+					dsp->cal_status);
+	wm_halo_set_calibration_control(dsp, "DSP1X Protection cd CAL_CHECKSUM",
+					dsp->cal_chksum);
+}
+
 int wm_halo_event(struct snd_soc_dapm_widget *w,
 		  struct snd_kcontrol *kcontrol, int event)
 {
+	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
+	struct wm_adsp *dsps = snd_soc_component_get_drvdata(component);
+	struct wm_adsp *dsp = &dsps[w->shift];
+
+	if (event == SND_SOC_DAPM_POST_PMU) {
+		flush_work(&dsp->boot_work);
+		mutex_lock(&dsp->pwr_lock);
+		if (!dsp->booted) {
+			mutex_unlock(&dsp->pwr_lock);
+			return -EIO;
+		}
+		wm_halo_apply_calibration(dsp);
+		mutex_unlock(&dsp->pwr_lock);
+	}
+
 	return wm_adsp_event(w, kcontrol, event);
 }
 EXPORT_SYMBOL_GPL(wm_halo_event);
