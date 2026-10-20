@@ -94,10 +94,15 @@ int ea_panel_mode_ctrl(struct dsi_panel *panel, bool enable)
 	if (!panel)
 		return -EINVAL;
 
-	/* A panel power cycle resets the hardware PCC block. */
+	/* A disabled panel may still retain the active CRTC PCC state. */
 	if (!dsi_panel_initialized(panel)) {
+		if (!enable && READ_ONCE(pcc_correction_active)) {
+			rc = ea_panel_send_pcc(panel, ELVSS_OFF_THRESHOLD);
+			if (rc && rc != -ENODEV)
+				return rc;
+			WRITE_ONCE(pcc_correction_active, false);
+		}
 		WRITE_ONCE(pcc_backlight_enable, enable);
-		WRITE_ONCE(pcc_correction_active, false);
 		return 0;
 	}
 
