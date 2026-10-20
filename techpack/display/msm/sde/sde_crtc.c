@@ -6843,6 +6843,11 @@ static void __sde_crtc_early_wakeup_work(struct kthread_work *work)
 	}
 
 	priv = dev->dev_private;
+	if (!priv || !priv->kms) {
+		SDE_DEBUG("display KMS is being removed\n");
+		return;
+	}
+
 	sde_kms = to_sde_kms(priv->kms);
 	sde_kms_trigger_early_wakeup(sde_kms, crtc);
 }
