@@ -798,4 +798,7 @@ struct cs35l41_private {
 	unsigned int sclk;
 };
 
+int cs35l41_probe(struct cs35l41_private *cs35l41,
+		  struct cs35l41_platform_data *pdata);
+
 #endif /*__CS35L41_H__*/
