@@ -740,9 +740,17 @@ u32 dsi_panel_get_fod_dim_alpha(struct dsi_panel *panel)
 			panel->fod_dim_lut[i - 1].alpha, panel->fod_dim_lut[i].alpha);
 }
 
+/* Caller must hold panel_lock. */
 int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
 {
 	int rc = 0;
+	enum dsi_cmd_set_type type = status ?
+		DSI_CMD_SET_DISP_HBM_FOD_ON : DSI_CMD_SET_DISP_HBM_FOD_OFF;
+
+	if (!panel || !panel->cur_mode || !panel->cur_mode->priv_info)
+		return -EINVAL;
+	if (!panel->cur_mode->priv_info->cmd_sets[type].count)
+		return -EOPNOTSUPP;
 
 	if (status) {
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_HBM_FOD_ON);
