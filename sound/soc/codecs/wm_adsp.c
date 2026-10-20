@@ -283,6 +283,7 @@
  * HALO_CCM_CORE_CONTROL
  */
 #define HALO_CORE_EN                        0x00000001
+#define HALO_CORE_RESET                     0x00000200
 
 /*
  * HALO_CORE_SOFT_RESET
@@ -3130,7 +3131,7 @@ int wm_halo_early_event(struct snd_soc_dapm_widget *w,
 					 dsp->base + HALO_CCM_CORE_CONTROL,
 					 HALO_CORE_RESET, HALO_CORE_RESET);
 		if (ret) {
-			adsp_err(dsp, "Failed to reset HALO core: %d\\n", ret);
+			adsp_err(dsp, "Failed to reset HALO core: %d\n", ret);
 			return ret;
 		}
 	}
