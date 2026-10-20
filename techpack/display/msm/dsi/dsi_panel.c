@@ -764,7 +764,9 @@ int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
 	if (status) {
 #ifdef CONFIG_EXPOSURE_ADJUSTMENT
 		if (ea_panel_is_enabled() && !panel->resend_ea) {
-			ea_panel_mode_ctrl(panel, false);
+			rc = ea_panel_mode_ctrl(panel, false);
+			if (rc)
+				return rc;
 			panel->resend_ea = true;
 			ea_disabled = true;
 		}
@@ -788,8 +790,9 @@ int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
 		} else {
 #ifdef CONFIG_EXPOSURE_ADJUSTMENT
 			if (panel->resend_ea) {
-				ea_panel_mode_ctrl(panel, true);
-				panel->resend_ea = false;
+				rc = ea_panel_mode_ctrl(panel, true);
+				if (!rc)
+					panel->resend_ea = false;
 			}
 #endif
 		}
@@ -825,8 +828,9 @@ int dsi_panel_set_hbm(struct dsi_panel *panel, bool enable)
 	if (!panel->panel_initialized) {
 #ifdef CONFIG_EXPOSURE_ADJUSTMENT
 		if (!enable && panel->resend_ea_hbm) {
-			ea_panel_mode_ctrl(panel, true);
-			panel->resend_ea_hbm = false;
+			rc = ea_panel_mode_ctrl(panel, true);
+			if (!rc)
+				panel->resend_ea_hbm = false;
 		}
 #endif
 		panel->hbm_requested = enable;
@@ -835,7 +839,9 @@ int dsi_panel_set_hbm(struct dsi_panel *panel, bool enable)
 
 #ifdef CONFIG_EXPOSURE_ADJUSTMENT
 	if (enable && ea_panel_is_enabled() && !panel->resend_ea_hbm) {
-		ea_panel_mode_ctrl(panel, false);
+		rc = ea_panel_mode_ctrl(panel, false);
+		if (rc)
+			return rc;
 		panel->resend_ea_hbm = true;
 		ea_disabled = true;
 	}
@@ -856,8 +862,9 @@ int dsi_panel_set_hbm(struct dsi_panel *panel, bool enable)
 	panel->hbm_requested = enable;
 #ifdef CONFIG_EXPOSURE_ADJUSTMENT
 	if (!enable && panel->resend_ea_hbm) {
-		ea_panel_mode_ctrl(panel, true);
-		panel->resend_ea_hbm = false;
+		rc = ea_panel_mode_ctrl(panel, true);
+		if (!rc)
+			panel->resend_ea_hbm = false;
 	}
 #endif
 	return 0;
