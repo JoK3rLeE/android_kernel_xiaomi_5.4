@@ -1057,8 +1057,8 @@ static int cs35l41_set_dai_fmt(struct snd_soc_dai *codec_dai, unsigned int fmt)
 	struct cs35l41_private *cs35l41 =
 		snd_soc_component_get_drvdata(codec_dai->component);
 	unsigned int asp_fmt, lrclk_fmt, sclk_fmt, slave_mode;
-
-	pr_debug("++++>CSPL: %s, fmt = %d.\n", __func__, fmt);
+	bool i2s_mode, dspa_mode;
+	int ret;
 
 	switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
 	case SND_SOC_DAIFMT_CBM_CFM:
@@ -1068,40 +1068,27 @@ static int cs35l41_set_dai_fmt(struct snd_soc_dai *codec_dai, unsigned int fmt)
 		slave_mode = 0;
 		break;
 	default:
-		dev_warn(
-			cs35l41->dev,
-			"cs35l41_set_dai_fmt: Mixed master mode unsupported\n");
+		dev_warn(cs35l41->dev,
+			 "Unsupported mixed-master DAI format: 0x%x\n", fmt);
 		return -EINVAL;
 	}
-
-	regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
-			   CS35L41_SCLK_MSTR_MASK,
-			   slave_mode << CS35L41_SCLK_MSTR_SHIFT);
-	regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
-			   CS35L41_LRCLK_MSTR_MASK,
-			   slave_mode << CS35L41_LRCLK_MSTR_SHIFT);
 
 	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
 	case SND_SOC_DAIFMT_DSP_A:
 		asp_fmt = 0;
-		cs35l41->i2s_mode = false;
-		cs35l41->dspa_mode = true;
+		i2s_mode = false;
+		dspa_mode = true;
 		break;
 	case SND_SOC_DAIFMT_I2S:
 		asp_fmt = 2;
-		cs35l41->i2s_mode = true;
-		cs35l41->dspa_mode = false;
+		i2s_mode = true;
+		dspa_mode = false;
 		break;
 	default:
-		dev_warn(
-			cs35l41->dev,
-			"cs35l41_set_dai_fmt: Invalid or unsupported DAI format\n");
+		dev_warn(cs35l41->dev,
+			 "Unsupported DAI data format: 0x%x\n", fmt);
 		return -EINVAL;
 	}
-
-	regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
-			   CS35L41_ASP_FMT_MASK,
-			   asp_fmt << CS35L41_ASP_FMT_SHIFT);
 
 	switch (fmt & SND_SOC_DAIFMT_INV_MASK) {
 	case SND_SOC_DAIFMT_NB_IF:
@@ -1122,18 +1109,43 @@ static int cs35l41_set_dai_fmt(struct snd_soc_dai *codec_dai, unsigned int fmt)
 		break;
 	default:
 		dev_warn(cs35l41->dev,
-			 "cs35l41_set_dai_fmt: Invalid DAI clock INV\n");
+			 "Unsupported DAI clock inversion: 0x%x\n", fmt);
 		return -EINVAL;
 	}
 
-	regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
-			   CS35L41_LRCLK_INV_MASK,
-			   lrclk_fmt << CS35L41_LRCLK_INV_SHIFT);
-	regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
-			   CS35L41_SCLK_INV_MASK,
-			   sclk_fmt << CS35L41_SCLK_INV_SHIFT);
+	ret = regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
+				 CS35L41_SCLK_MSTR_MASK,
+				 slave_mode << CS35L41_SCLK_MSTR_SHIFT);
+	if (ret)
+		return ret;
 
-	pr_debug("---->CSPL: %s, fmt = %d.\n", __func__, fmt);
+	ret = regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
+				 CS35L41_LRCLK_MSTR_MASK,
+				 slave_mode << CS35L41_LRCLK_MSTR_SHIFT);
+	if (ret)
+		return ret;
+
+	ret = regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
+				 CS35L41_ASP_FMT_MASK,
+				 asp_fmt << CS35L41_ASP_FMT_SHIFT);
+	if (ret)
+		return ret;
+
+	ret = regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
+				 CS35L41_LRCLK_INV_MASK,
+				 lrclk_fmt << CS35L41_LRCLK_INV_SHIFT);
+	if (ret)
+		return ret;
+
+	ret = regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
+				 CS35L41_SCLK_INV_MASK,
+				 sclk_fmt << CS35L41_SCLK_INV_SHIFT);
+	if (ret)
+		return ret;
+
+	cs35l41->i2s_mode = i2s_mode;
+	cs35l41->dspa_mode = dspa_mode;
+
 	return 0;
 }
 
