@@ -3112,6 +3112,33 @@ int wm_adsp_early_event(struct snd_soc_dapm_widget *w,
 }
 EXPORT_SYMBOL_GPL(wm_adsp_early_event);
 
+/*
+ * Xiaomi's CS35L41 integration uses a separate HALO preloader widget. Keep
+ * its reset sequence here, but reuse the 5.4 component-based WM ADSP lifecycle
+ * so firmware loading, control synchronization and shutdown stay consistent.
+ */
+int wm_halo_early_event(struct snd_soc_dapm_widget *w,
+			struct snd_kcontrol *kcontrol, int event)
+{
+	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
+	struct wm_adsp *dsps = snd_soc_component_get_drvdata(component);
+	struct wm_adsp *dsp = &dsps[w->shift];
+	int ret;
+
+	if (event == SND_SOC_DAPM_PRE_PMU) {
+		ret = regmap_update_bits(dsp->regmap,
+					 dsp->base + HALO_CCM_CORE_CONTROL,
+					 HALO_CORE_RESET, HALO_CORE_RESET);
+		if (ret) {
+			adsp_err(dsp, "Failed to reset HALO core: %d\\n", ret);
+			return ret;
+		}
+	}
+
+	return wm_adsp_early_event(w, kcontrol, event);
+}
+EXPORT_SYMBOL_GPL(wm_halo_early_event);
+
 static int wm_adsp2_start_core(struct wm_adsp *dsp)
 {
 	return regmap_update_bits(dsp->regmap, dsp->base + ADSP2_CONTROL,
@@ -3225,6 +3252,17 @@ err:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(wm_adsp_event);
+
+/*
+ * Preserve the CS35L41 HALO widget ABI while routing the power-up/down
+ * sequence through the component-based implementation used by this kernel.
+ */
+int wm_halo_event(struct snd_soc_dapm_widget *w,
+		  struct snd_kcontrol *kcontrol, int event)
+{
+	return wm_adsp_event(w, kcontrol, event);
+}
+EXPORT_SYMBOL_GPL(wm_halo_event);
 
 static int wm_halo_start_core(struct wm_adsp *dsp)
 {
