@@ -8996,9 +8996,13 @@ int dsi_display_unprepare(struct dsi_display *display)
 		       display->name, rc);
 	if (!display->poms_pending && !is_skip_op_required(display)) {
 		rc = dsi_panel_unprepare(display->panel);
-		if (rc)
+		if (rc) {
 			DSI_ERR("[%s] panel unprepare failed, rc=%d\n",
 			       display->name, rc);
+		} else {
+			/* Power-off clears any panel-side FOD HBM state. */
+			dsi_display_set_fod_ui(display, false);
+		}
 	}
 
 	/* Remove additional vote added for pre_mode_switch_to_cmd */
