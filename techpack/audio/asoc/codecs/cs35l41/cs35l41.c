@@ -1283,16 +1283,17 @@ static int cs35l41_pcm_startup(struct snd_pcm_substream *substream,
 			       struct snd_soc_dai *dai)
 {
 	struct snd_soc_component *codec = dai->component;
-	pr_debug("++++>CSPL: %s.\n", __func__);
+	int ret;
 
-	cs35l41_set_dai_fmt(dai, SND_SOC_DAIFMT_CBS_CFS | SND_SOC_DAIFMT_I2S);
-	cs35l41_codec_set_sysclk(codec, 0, 0, 1536000, 0);
-#if 0
-	if (substream->runtime)
-		return snd_pcm_hw_constraint_list(substream->runtime, 0,
-				SNDRV_PCM_HW_PARAM_RATE, &cs35l41_constraints);
-#endif
-	pr_debug("---->CSPL: %s.\n", __func__);
+	ret = cs35l41_set_dai_fmt(dai,
+				  SND_SOC_DAIFMT_CBS_CFS | SND_SOC_DAIFMT_I2S);
+	if (ret)
+		return ret;
+
+	ret = cs35l41_codec_set_sysclk(codec, 0, 0, 1536000, 0);
+	if (ret)
+		return ret;
+
 	return 0;
 }
 
@@ -1300,68 +1301,87 @@ static int cs35l41_codec_set_sysclk(struct snd_soc_component *codec, int clk_id,
 				    int source, unsigned int freq, int dir)
 {
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(codec);
-
-	int val = 0;
-	cs35l41->extclk_freq = freq;
-
-	pr_debug("++++>CSPL: %s: clk_id = %d, src = %d, freq = %d, dir = %d.\n",
-		 __func__, clk_id, source, freq, dir);
-	dev_info(codec->dev, "%s: clk_id=%d, src=%d, freq=%d\n", __func__,
-		 clk_id, source, freq);
+	unsigned int clksrc, val;
+	int extclk_cfg, ret;
 
 	switch (clk_id) {
 	case 0:
-		cs35l41->clksrc = CS35L41_PLLSRC_SCLK;
+		clksrc = CS35L41_PLLSRC_SCLK;
 		break;
 	case 1:
-		cs35l41->clksrc = CS35L41_PLLSRC_LRCLK;
+		clksrc = CS35L41_PLLSRC_LRCLK;
 		break;
 	case 2:
-		cs35l41->clksrc = CS35L41_PLLSRC_PDMCLK;
+		clksrc = CS35L41_PLLSRC_PDMCLK;
 		break;
 	case 3:
-		cs35l41->clksrc = CS35L41_PLLSRC_SELF;
+		clksrc = CS35L41_PLLSRC_SELF;
 		break;
 	case 4:
-		cs35l41->clksrc = CS35L41_PLLSRC_MCLK;
+		clksrc = CS35L41_PLLSRC_MCLK;
 		break;
 	default:
-		dev_err(codec->dev, "Invalid CLK Config\n");
+		dev_err(codec->dev, "Invalid CLK Config: %d\n", clk_id);
 		return -EINVAL;
 	}
 
-	cs35l41->extclk_cfg = cs35l41_get_clk_config(freq);
-
-	if (cs35l41->extclk_cfg < 0) {
-		dev_err(codec->dev, "Invalid CLK Config: %d, freq: %u\n",
-			cs35l41->extclk_cfg, freq);
+	extclk_cfg = cs35l41_get_clk_config(freq);
+	if (extclk_cfg < 0) {
+		dev_err(codec->dev, "Invalid reference clock frequency: %u\n",
+			freq);
 		return -EINVAL;
 	}
 
-	regmap_update_bits(cs35l41->regmap, CS35L41_PLL_CLK_CTRL,
-			   CS35L41_PLL_OPENLOOP_MASK,
-			   1 << CS35L41_PLL_OPENLOOP_SHIFT);
-	regmap_update_bits(cs35l41->regmap, CS35L41_PLL_CLK_CTRL,
-			   CS35L41_REFCLK_FREQ_MASK,
-			   cs35l41->extclk_cfg << CS35L41_REFCLK_FREQ_SHIFT);
-	regmap_update_bits(cs35l41->regmap, CS35L41_PLL_CLK_CTRL,
-			   CS35L41_PLL_CLK_EN_MASK,
-			   0 << CS35L41_PLL_CLK_EN_SHIFT);
-	regmap_update_bits(cs35l41->regmap, CS35L41_PLL_CLK_CTRL,
-			   CS35L41_PLL_CLK_SEL_MASK, cs35l41->clksrc);
-	regmap_update_bits(cs35l41->regmap, CS35L41_PLL_CLK_CTRL,
-			   CS35L41_PLL_OPENLOOP_MASK,
-			   0 << CS35L41_PLL_OPENLOOP_SHIFT);
-	regmap_update_bits(cs35l41->regmap, CS35L41_PLL_CLK_CTRL,
-			   CS35L41_PLL_CLK_EN_MASK,
-			   1 << CS35L41_PLL_CLK_EN_SHIFT);
+	ret = regmap_update_bits(cs35l41->regmap, CS35L41_PLL_CLK_CTRL,
+				 CS35L41_PLL_OPENLOOP_MASK,
+				 1 << CS35L41_PLL_OPENLOOP_SHIFT);
+	if (ret)
+		goto err_disable;
 
-	regmap_read(cs35l41->regmap, CS35L41_PLL_CLK_CTRL, &val);
-	dev_info(codec->dev, "%s: 0x%x <== 0x%x\n", __func__,
-		 CS35L41_PLL_CLK_CTRL, val);
-	pr_debug("---->CSPL: %s.\n", __func__);
+	ret = regmap_update_bits(cs35l41->regmap, CS35L41_PLL_CLK_CTRL,
+				 CS35L41_REFCLK_FREQ_MASK,
+				 extclk_cfg << CS35L41_REFCLK_FREQ_SHIFT);
+	if (ret)
+		goto err_disable;
+
+	ret = regmap_update_bits(cs35l41->regmap, CS35L41_PLL_CLK_CTRL,
+				 CS35L41_PLL_CLK_EN_MASK, 0);
+	if (ret)
+		goto err_disable;
+
+	ret = regmap_update_bits(cs35l41->regmap, CS35L41_PLL_CLK_CTRL,
+				 CS35L41_PLL_CLK_SEL_MASK, clksrc);
+	if (ret)
+		goto err_disable;
+
+	ret = regmap_update_bits(cs35l41->regmap, CS35L41_PLL_CLK_CTRL,
+				 CS35L41_PLL_OPENLOOP_MASK, 0);
+	if (ret)
+		goto err_disable;
+
+	ret = regmap_update_bits(cs35l41->regmap, CS35L41_PLL_CLK_CTRL,
+				 CS35L41_PLL_CLK_EN_MASK,
+				 1 << CS35L41_PLL_CLK_EN_SHIFT);
+	if (ret)
+		goto err_disable;
+
+	ret = regmap_read(cs35l41->regmap, CS35L41_PLL_CLK_CTRL, &val);
+	if (ret)
+		goto err_disable;
+
+	cs35l41->clksrc = clksrc;
+	cs35l41->extclk_cfg = extclk_cfg;
+	cs35l41->extclk_freq = freq;
+	dev_dbg(codec->dev, "PLL clock control: 0x%x = 0x%x\n",
+		CS35L41_PLL_CLK_CTRL, val);
 
 	return 0;
+
+err_disable:
+	regmap_update_bits(cs35l41->regmap, CS35L41_PLL_CLK_CTRL,
+			   CS35L41_PLL_CLK_EN_MASK, 0);
+	dev_err(codec->dev, "Failed to configure PLL clock: %d\n", ret);
+	return ret;
 }
 
 static int cs35l41_dai_set_sysclk(struct snd_soc_dai *dai, int clk_id,
