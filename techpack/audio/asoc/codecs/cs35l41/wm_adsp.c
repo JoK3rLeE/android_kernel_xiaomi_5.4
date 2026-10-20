@@ -10,7 +10,6 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-#define DEBUG
 //#define WM_ADSP_DEBUG
 #include <linux/module.h>
 #include <linux/moduleparam.h>
@@ -45,7 +44,7 @@
 #define adsp_info(_dsp, fmt, ...)                                              \
 	dev_info(_dsp->dev, "DSP%d: " fmt, _dsp->num, ##__VA_ARGS__)
 #define adsp_dbg(_dsp, fmt, ...)                                               \
-	dev_info(_dsp->dev, "DSP%d: " fmt, _dsp->num, ##__VA_ARGS__)
+	dev_dbg(_dsp->dev, "DSP%d: " fmt, _dsp->num, ##__VA_ARGS__)
 
 #define MAXBULK 4 /* Max byte I2C bulk limit */
 
