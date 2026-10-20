@@ -110,23 +110,31 @@ static int cs35l41_dsp_power_ev(struct snd_soc_dapm_widget *w,
 {
 	struct snd_soc_component *codec = snd_soc_dapm_to_component(w->dapm);
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(codec);
+	int ret = 0;
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
-		if (cs35l41->halo_booted == false)
-			wm_halo_early_event(w, kcontrol, event);
+		if (!cs35l41->halo_booted)
+			ret = wm_halo_early_event(w, kcontrol, event);
 		else
 			cs35l41->dsp.booted = true;
-
-		return 0;
+		break;
 	case SND_SOC_DAPM_PRE_PMD:
-		if (cs35l41->halo_booted == false) {
-			wm_halo_early_event(w, kcontrol, event);
-			wm_halo_event(w, kcontrol, event);
+		if (!cs35l41->halo_booted) {
+			ret = wm_halo_early_event(w, kcontrol, event);
+			if (ret)
+				return ret;
+			ret = wm_halo_event(w, kcontrol, event);
 		}
+		break;
 	default:
-		return 0;
+		break;
 	}
+
+	if (ret)
+		dev_err(cs35l41->dev, "DSP power event %d failed: %d\\n",
+			event, ret);
+	return ret;
 }
 
 static int cs35l41_dsp_load_ev(struct snd_soc_dapm_widget *w,
@@ -134,16 +142,17 @@ static int cs35l41_dsp_load_ev(struct snd_soc_dapm_widget *w,
 {
 	struct snd_soc_component *codec = snd_soc_dapm_to_component(w->dapm);
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(codec);
+	int ret = 0;
 
-	switch (event) {
-	case SND_SOC_DAPM_POST_PMU:
-		if (cs35l41->halo_booted == false) {
-			wm_halo_event(w, kcontrol, event);
+	if (event == SND_SOC_DAPM_POST_PMU && !cs35l41->halo_booted) {
+		ret = wm_halo_event(w, kcontrol, event);
+		if (!ret)
 			cs35l41->halo_booted = true;
-		}
-	default:
-		return 0;
+		else
+			dev_err(cs35l41->dev, "DSP load event failed: %d\\n", ret);
 	}
+
+	return ret;
 }
 
 static int cs35l41_halo_booted_get(struct snd_kcontrol *kcontrol,
@@ -1045,10 +1054,19 @@ static int cs35l41_pcm_hw_params(struct snd_pcm_substream *substream,
 		if (rate == cs35l41_fs_rates[i].rate)
 			break;
 	}
-	regmap_update_bits(cs35l41->regmap, CS35L41_GLOBAL_CLK_CTRL,
-			   CS35L41_GLOBAL_FS_MASK,
-			   cs35l41_fs_rates[i].fs_cfg
-				   << CS35L41_GLOBAL_FS_SHIFT);
+	if (i == ARRAY_SIZE(cs35l41_fs_rates)) {
+		dev_err(cs35l41->dev, "Unsupported sample rate: %u\\n", rate);
+		return -EINVAL;
+	}
+	{
+		int ret = regmap_update_bits(cs35l41->regmap,
+					     CS35L41_GLOBAL_CLK_CTRL,
+					     CS35L41_GLOBAL_FS_MASK,
+					     cs35l41_fs_rates[i].fs_cfg
+						     << CS35L41_GLOBAL_FS_SHIFT);
+		if (ret)
+			return ret;
+	}
 
 	asp_wl = params_width(params);
 	asp_width = params_physical_width(params);
