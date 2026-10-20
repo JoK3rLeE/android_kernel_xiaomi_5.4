@@ -3977,23 +3977,21 @@ static int wm_coeff_k_get(struct snd_kcontrol *kctl,
 }
 static int wm_adsp_k_ctl_put(struct wm_adsp *dsp, const char *name, int value)
 {
-	struct snd_kcontrol *kctl = NULL;
-	struct snd_ctl_elem_value ucontrol;
+	struct snd_kcontrol *kctl;
+	struct snd_ctl_elem_value ucontrol = { 0 };
 	struct snd_soc_card *card = dsp->component->card;
+	__be32 be_value = cpu_to_be32(value);
 
 	kctl = snd_soc_card_get_kcontrol(card, name);
-	if (kctl == NULL) {
+	if (!kctl) {
 		adsp_warn(dsp, "%s: %s isn't found\n", __func__, name);
-		return -1;
+		return -ENOENT;
 	}
 
 	adsp_dbg(dsp, "%s: %s:0x%x\n", __func__, kctl->id.name, value);
-	value = cpu_to_be32(value);
-	memcpy((char *)ucontrol.value.bytes.data, (char *)&value,
-	       sizeof(value));
-	wm_coeff_k_put(kctl, &ucontrol);
+	memcpy(ucontrol.value.bytes.data, &be_value, sizeof(be_value));
 
-	return 0;
+	return wm_coeff_k_put(kctl, &ucontrol);
 }
 
 static int wm_adsp_k_ctl_get(struct wm_adsp *dsp, const char *name)
@@ -4053,7 +4051,7 @@ static int wm_halo_apply_calibration(struct snd_soc_dapm_widget *w)
 		break;
 	}
 
-	adsp_warn(dsp, "Do thing'\n");
+	adsp_dbg(dsp, "Calibration controls applied for firmware %d\n", dsp->fw);
 	return 0;
 }
 
