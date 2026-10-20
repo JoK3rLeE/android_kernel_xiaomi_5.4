@@ -5720,9 +5720,8 @@ static DEVICE_ATTR(fod_ui, 0444,
  * the global backlight, this brightens only the FOD circle area, which
  * is what the goodix optical FP sensor needs for a usable capture.
  *
- * Write "1" to enable, "0" to disable. Write-only by design — the
- * commands are fire-and-forget; readback would require panel state we
- * don't track here.
+ * Write "1" to enable, "0" to disable. The command itself is write-only;
+ * the separate fod_ui attribute reports the last successfully applied state.
  */
 static ssize_t sysfs_fod_hbm_write(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
@@ -5740,6 +5739,8 @@ static ssize_t sysfs_fod_hbm_write(struct device *dev,
 	rc = kstrtouint(buf, 10, &val);
 	if (rc)
 		return rc;
+	if (val > 1)
+		return -EINVAL;
 
 	/*
 	 * The existing in-kernel caller sde_connector_update_fod_hbm() runs
@@ -5754,6 +5755,10 @@ static ssize_t sysfs_fod_hbm_write(struct device *dev,
 	mutex_lock(&display->panel->panel_lock);
 	if (display->panel->hbm_requested) {
 		rc = -EBUSY;
+		goto out_unlock;
+	}
+	if (!display->panel->panel_initialized) {
+		rc = -EHOSTDOWN;
 		goto out_unlock;
 	}
 
