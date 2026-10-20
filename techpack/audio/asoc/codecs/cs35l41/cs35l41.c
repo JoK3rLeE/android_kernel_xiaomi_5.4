@@ -646,7 +646,14 @@ static irqreturn_t cs35l41_irq(int irq, void *data)
 	    !(status[2] & ~masks[2]) && !(status[3] & ~masks[3]))
 		return IRQ_NONE;
 
-	if (status[1] & (1 << CS35L41_CSPL_MBOX_CMD_FW_SHIFT)) {
+	/*
+	 * Only accept a mailbox completion when that source is unmasked.
+	 * Another active interrupt can enter this handler while the mailbox
+	 * source is masked; treating its stale status bit as a completion can
+	 * incorrectly satisfy a later command wait.
+	 */
+	if (status[1] & ~masks[1] &
+	    (1 << CS35L41_CSPL_MBOX_CMD_FW_SHIFT)) {
 		CS35L41_IRQ_REGMAP(regmap_write(cs35l41->regmap, CS35L41_IRQ1_STATUS2,
 			     1 << CS35L41_CSPL_MBOX_CMD_FW_SHIFT));
 		complete(&cs35l41->mbox_cmd);
