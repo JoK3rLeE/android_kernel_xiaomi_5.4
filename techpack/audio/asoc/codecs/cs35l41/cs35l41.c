@@ -132,7 +132,7 @@ static int cs35l41_dsp_power_ev(struct snd_soc_dapm_widget *w,
 	}
 
 	if (ret)
-		dev_err(cs35l41->dev, "DSP power event %d failed: %d\\n",
+		dev_err(cs35l41->dev, "DSP power event %d failed: %d\n",
 			event, ret);
 	return ret;
 }
@@ -149,7 +149,7 @@ static int cs35l41_dsp_load_ev(struct snd_soc_dapm_widget *w,
 		if (!ret)
 			cs35l41->halo_booted = true;
 		else
-			dev_err(cs35l41->dev, "DSP load event failed: %d\\n", ret);
+			dev_err(cs35l41->dev, "DSP load event failed: %d\n", ret);
 	}
 
 	return ret;
@@ -1055,7 +1055,7 @@ static int cs35l41_pcm_hw_params(struct snd_pcm_substream *substream,
 			break;
 	}
 	if (i == ARRAY_SIZE(cs35l41_fs_rates)) {
-		dev_err(cs35l41->dev, "Unsupported sample rate: %u\\n", rate);
+		dev_err(cs35l41->dev, "Unsupported sample rate: %u\n", rate);
 		return -EINVAL;
 	}
 	{
