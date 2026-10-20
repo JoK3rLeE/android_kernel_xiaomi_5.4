@@ -43,12 +43,121 @@
 #include <linux/mfd/spk-id.h>
 
 #include "wm_adsp.h"
+#include "cs35l41.h"
+#include <sound/cs35l41.h>
+
+static int cs35l41_cal_z_get(struct snd_kcontrol *kcontrol,
+			     struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct cs35l41_private *cs35l41 =
+		snd_soc_component_get_drvdata(component);
+
+	ucontrol->value.integer.value[0] = cs35l41->dsp.cal_z;
+	return 0;
+}
+
+static int cs35l41_cal_z_put(struct snd_kcontrol *kcontrol,
+			     struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct cs35l41_private *cs35l41 =
+		snd_soc_component_get_drvdata(component);
+	struct wm_adsp *dsp = &cs35l41->dsp;
+
+	mutex_lock(&dsp->pwr_lock);
+	dsp->cal_z = ucontrol->value.integer.value[0];
+	dsp->cal_chksum = dsp->cal_z + dsp->cal_status;
+	mutex_unlock(&dsp->pwr_lock);
+	return 0;
+}
+
+static int cs35l41_ambient_get(struct snd_kcontrol *kcontrol,
+			       struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct cs35l41_private *cs35l41 =
+		snd_soc_component_get_drvdata(component);
+
+	ucontrol->value.integer.value[0] = cs35l41->dsp.ambient;
+	return 0;
+}
+
+static int cs35l41_ambient_put(struct snd_kcontrol *kcontrol,
+			       struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct cs35l41_private *cs35l41 =
+		snd_soc_component_get_drvdata(component);
+	struct wm_adsp *dsp = &cs35l41->dsp;
+
+	mutex_lock(&dsp->pwr_lock);
+	dsp->ambient = ucontrol->value.integer.value[0];
+	mutex_unlock(&dsp->pwr_lock);
+	return 0;
+}
+
+static int cs35l41_cal_status_get(struct snd_kcontrol *kcontrol,
+				  struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct cs35l41_private *cs35l41 =
+		snd_soc_component_get_drvdata(component);
+
+	ucontrol->value.integer.value[0] = cs35l41->dsp.cal_status;
+	return 0;
+}
+
+static int cs35l41_cal_status_put(struct snd_kcontrol *kcontrol,
+				  struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct cs35l41_private *cs35l41 =
+		snd_soc_component_get_drvdata(component);
+	struct wm_adsp *dsp = &cs35l41->dsp;
+
+	mutex_lock(&dsp->pwr_lock);
+	dsp->cal_status = ucontrol->value.integer.value[0];
+	dsp->cal_chksum = dsp->cal_z + dsp->cal_status;
+	mutex_unlock(&dsp->pwr_lock);
+	return 0;
+}
+
+static int cs35l41_cal_chksum_get(struct snd_kcontrol *kcontrol,
+				  struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct cs35l41_private *cs35l41 =
+		snd_soc_component_get_drvdata(component);
+
+	ucontrol->value.integer.value[0] = cs35l41->dsp.cal_chksum;
+	return 0;
+}
+
+static int cs35l41_cal_chksum_put(struct snd_kcontrol *kcontrol,
+				  struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct cs35l41_private *cs35l41 =
+		snd_soc_component_get_drvdata(component);
+
+	mutex_lock(&cs35l41->dsp.pwr_lock);
+	cs35l41->dsp.cal_chksum = ucontrol->value.integer.value[0];
+	mutex_unlock(&cs35l41->dsp.pwr_lock);
+	return 0;
+}
 
 static const struct snd_kcontrol_new cs35l41_fw_controls[] = {
 	WM_ADSP_FW_CONTROL("DSP1", 0),
+	SOC_SINGLE_EXT("DSP Set CAL_Z", SND_SOC_NOPM, 0, 0xFFFFFF, 0,
+		       cs35l41_cal_z_get, cs35l41_cal_z_put),
+	SOC_SINGLE_EXT("DSP Set AMBIENT", SND_SOC_NOPM, 0, 0xFFFFFF, 0,
+		       cs35l41_ambient_get, cs35l41_ambient_put),
+	SOC_SINGLE_EXT("DSP Set CAL_STATUS", SND_SOC_NOPM, 0, 0xFFFFFF, 0,
+		       cs35l41_cal_status_get, cs35l41_cal_status_put),
+	SOC_SINGLE_EXT("DSP Set CAL_CHKSUM", SND_SOC_NOPM, 0, 0xFFFFFF, 0,
+		       cs35l41_cal_chksum_get, cs35l41_cal_chksum_put),
 };
-#include "cs35l41.h"
-#include <sound/cs35l41.h>
 
 static const char *const cs35l41_supplies[] = {
 	"VA",
