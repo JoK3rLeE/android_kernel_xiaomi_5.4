@@ -1180,6 +1180,13 @@ static int cs35l41_pcm_hw_params(struct snd_pcm_substream *substream,
 		dev_err(cs35l41->dev, "Unsupported sample rate: %u\n", rate);
 		return -EINVAL;
 	}
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		if (cs35l41->dsp.n_rx_rates && !cs35l41->dsp.rx_rate_cache)
+			return -EINVAL;
+	} else if (cs35l41->dsp.n_tx_rates &&
+		   !cs35l41->dsp.tx_rate_cache) {
+		return -EINVAL;
+	}
 	rate_cfg = cs35l41_fs_rates[i].fs_cfg;
 
 	ret = regmap_update_bits(cs35l41->regmap, CS35L41_GLOBAL_CLK_CTRL,
@@ -1241,13 +1248,9 @@ static int cs35l41_pcm_hw_params(struct snd_pcm_substream *substream,
 	 * the cache before the DSP core is enabled.
 	 */
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		if (cs35l41->dsp.n_rx_rates && !cs35l41->dsp.rx_rate_cache)
-			return -EINVAL;
 		for (i = 0; i < cs35l41->dsp.n_rx_rates; i++)
 			cs35l41->dsp.rx_rate_cache[i] = rate_cfg;
 	} else {
-		if (cs35l41->dsp.n_tx_rates && !cs35l41->dsp.tx_rate_cache)
-			return -EINVAL;
 		for (i = 0; i < cs35l41->dsp.n_tx_rates; i++)
 			cs35l41->dsp.tx_rate_cache[i] = rate_cfg;
 	}
@@ -1408,20 +1411,21 @@ static int cs35l41_digital_mute(struct snd_soc_dai *dai, int mute)
 {
 	struct snd_soc_component *codec = dai->component;
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(codec);
-
-	dev_dbg(cs35l41->dev, "%s: %d\n", __func__, mute);
-	pr_debug("++++>CSPL: %s, mute = %d.\n", __func__, mute);
+	int ret;
 
 	if (mute) {
-		regmap_update_bits(cs35l41->regmap, 0x6000, 0x7ff << 3,
-				   0x400 << 3 | 0x7);
+		ret = regmap_update_bits(cs35l41->regmap, 0x6000, 0x7ff << 3,
+					 0x400 << 3 | 0x7);
+		if (ret)
+			return ret;
 		mdelay(30);
 	} else {
-		regmap_update_bits(cs35l41->regmap, 0x6000, 0x7ff << 3,
-				   0x0 << 3 | 0x4);
+		ret = regmap_update_bits(cs35l41->regmap, 0x6000, 0x7ff << 3,
+					 0x0 << 3 | 0x4);
+		if (ret)
+			return ret;
 	}
 
-	pr_debug("---->CSPL: %s.\n", __func__);
 	return 0;
 }
 
