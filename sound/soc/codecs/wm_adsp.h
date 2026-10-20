@@ -104,6 +104,8 @@ struct wm_adsp {
 	bool unlock_all;
 	unsigned int n_rx_rates;
 	unsigned int n_tx_rates;
+	u8 *rx_rate_cache;
+	u8 *tx_rate_cache;
 
 	/* Xiaomi CS35L41 speaker-protection calibration defaults/state. */
 	u32 cal_z;
