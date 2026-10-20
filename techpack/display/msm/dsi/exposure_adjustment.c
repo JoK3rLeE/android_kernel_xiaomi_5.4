@@ -87,26 +87,44 @@ bool ea_panel_is_enabled(void)
 	return READ_ONCE(pcc_backlight_enable);
 }
 
-void ea_panel_mode_ctrl(struct dsi_panel *panel, bool enable)
+int ea_panel_mode_ctrl(struct dsi_panel *panel, bool enable)
 {
+	int rc;
+
 	if (!panel)
-		return;
+		return -EINVAL;
 
-	if (READ_ONCE(pcc_backlight_enable) != enable) {
-		WRITE_ONCE(pcc_backlight_enable, enable);
-
-		/* Do not send DSI/PCC updates while the panel is powered off. */
-		if (!dsi_panel_initialized(panel))
-			return;
-
-		dsi_panel_set_backlight(panel, READ_ONCE(last_level));
-		if (!enable && !ea_panel_send_pcc(panel, ELVSS_OFF_THRESHOLD))
-			WRITE_ONCE(pcc_correction_active, false);
-	} else if (!READ_ONCE(last_level) && !enable &&
-			dsi_panel_initialized(panel)) {
-		if (!ea_panel_send_pcc(panel, ELVSS_OFF_THRESHOLD))
-			WRITE_ONCE(pcc_correction_active, false);
+	if (READ_ONCE(pcc_backlight_enable) == enable) {
+		if (!READ_ONCE(last_level) && !enable &&
+				dsi_panel_initialized(panel)) {
+			rc = ea_panel_send_pcc(panel, ELVSS_OFF_THRESHOLD);
+			if (!rc)
+				WRITE_ONCE(pcc_correction_active, false);
+			return rc;
+		}
+		return 0;
 	}
+
+	/* Deactivate PCC correction before lowering the physical backlight. */
+	if (!enable && READ_ONCE(pcc_correction_active) &&
+			dsi_panel_initialized(panel)) {
+		rc = ea_panel_send_pcc(panel, ELVSS_OFF_THRESHOLD);
+		if (rc)
+			return rc;
+		WRITE_ONCE(pcc_correction_active, false);
+	}
+
+	WRITE_ONCE(pcc_backlight_enable, enable);
+
+	/* The next backlight update will apply the selected mode after power-on. */
+	if (!dsi_panel_initialized(panel))
+		return 0;
+
+	rc = dsi_panel_set_backlight(panel, READ_ONCE(last_level));
+	if (rc)
+		pr_err("exposure adjustment: backlight update failed, rc=%d\\n", rc);
+
+	return 0;
 }
 
 u32 ea_panel_calc_backlight(struct dsi_panel *panel, u32 bl_lvl)
