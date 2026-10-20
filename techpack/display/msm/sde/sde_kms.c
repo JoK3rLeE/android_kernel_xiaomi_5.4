@@ -28,6 +28,7 @@
 #include <linux/dma-buf.h>
 #include <linux/memblock.h>
 #include <linux/suspend.h>
+#include <linux/string.h>
 #include <linux/msm_drm_notify.h>
 #include <drm/drm_atomic_uapi.h>
 #include <drm/drm_probe_helper.h>
@@ -992,6 +993,8 @@ static void _sde_kms_drm_check_dpms(struct drm_atomic_state *old_state,
 
 			if (connector->panel) {
 				struct msm_drm_notifier legacy_data;
+				struct sde_connector *c_conn = to_sde_connector(connector);
+				struct dsi_display *display = c_conn->display;
 				int legacy_mode = new_mode;
 
 				drm_panel_notifier_call_chain(connector->panel,
@@ -1031,7 +1034,9 @@ static void _sde_kms_drm_check_dpms(struct drm_atomic_state *old_state,
 					continue;
 				}
 
-				legacy_data.id = MSM_DRM_PRIMARY_DISPLAY;
+				legacy_data.id = (display && display->display_type &&
+					!strcmp(display->display_type, "secondary")) ?
+					MSM_DRM_EXTERNAL_DISPLAY : MSM_DRM_PRIMARY_DISPLAY;
 				legacy_data.data = &legacy_mode;
 
 				if (event == DRM_PANEL_EARLY_EVENT_BLANK)
