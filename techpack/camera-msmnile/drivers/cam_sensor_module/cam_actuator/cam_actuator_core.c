@@ -449,12 +449,13 @@ static int aan_i2c_read(struct camera_io_master *io_master_info,
 		struct i2c_settings_list *i2c_list, unsigned short addr,
 		unsigned short *data)
 {
+	uint32_t read_data = 0;
 	int rc;
 
 	i2c_list->i2c_settings.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	i2c_list->i2c_settings.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 
-	rc = camera_io_dev_read(io_master_info, addr, (uint32_t *)data,
+	rc = camera_io_dev_read(io_master_info, addr, &read_data,
 			i2c_list->i2c_settings.addr_type,
 			i2c_list->i2c_settings.data_type);
 	if (rc < 0) {
@@ -463,6 +464,7 @@ static int aan_i2c_read(struct camera_io_master *io_master_info,
 		return rc;
 	}
 
+	*data = (unsigned short)read_data;
 	CAM_DBG(CAM_ACTUATOR, "aan, I2C read addr=0x%x data=0x%x sid=0x%x",
 		addr, *data, io_master_info->cci_client->sid);
 	return 0;
