@@ -20,6 +20,7 @@
 #include <linux/platform_device.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
+#include <linux/pinctrl/consumer.h>
 #include <linux/delay.h>
 #include <linux/mfd/spk-id.h>
 
