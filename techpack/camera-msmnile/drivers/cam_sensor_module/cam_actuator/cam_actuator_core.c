@@ -12,6 +12,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <cam_sensor_cmn_header.h>
 #include "cam_actuator_core.h"
 #include "cam_sensor_util.h"
@@ -417,9 +418,10 @@ int32_t cam_actuator_publish_dev_info(struct cam_req_mgr_device_info *info)
 #define AAN_AK7374_WRITE_NUM 25
 #define AAN_AK7374_READ_NUM 22
 
-unsigned int aan_already_write;
+static bool aan_already_write;
+static DEFINE_MUTEX(aan_lock);
 
-unsigned int aan_ak7374_setting[AAN_AK7374_WRITE_NUM][2] = {
+static const unsigned int aan_ak7374_setting[AAN_AK7374_WRITE_NUM][2] = {
 	{0xAE, 0x3B}, {0x10, 0x36}, {0x11, 0x23}, {0x12, 0xDC},
 	{0x13, 0x78}, {0x14, 0x14}, {0x15, 0x1E}, {0x16, 0x1A},
 	{0x17, 0x5E}, {0x18, 0xDB}, {0x19, 0xC8}, {0x1A, 0x28},
@@ -436,7 +438,7 @@ power off
 power on
 wait 10ms
  */
-unsigned int aan_ak7374_verify[AAN_AK7374_READ_NUM][2] = {
+static const unsigned int aan_ak7374_verify[AAN_AK7374_READ_NUM][2] = {
 	{0x0A, 0x89}, {0x0B, 0x84}, {0x10, 0x36}, {0x11, 0x23},
 	{0x12, 0xDC}, {0x13, 0x78}, {0x14, 0x14}, {0x15, 0x1E},
 	{0x16, 0x1A}, {0x17, 0x5E}, {0x18, 0xDB}, {0x19, 0xC8},
@@ -505,11 +507,6 @@ static int32_t cam_actuator_anti_noise(struct cam_actuator_ctrl_t *a_ctrl,
 	bool verified = false;
 	int rc = 0;
 
-	if (aan_already_write) {
-		CAM_DBG(CAM_ACTUATOR, "aan, actuator EEPROM already verified");
-		return 0;
-	}
-
 	if (!a_ctrl || !i2c_set || !a_ctrl->io_master_info.cci_client) {
 		CAM_ERR(CAM_ACTUATOR, "aan, invalid actuator/I2C settings");
 		return -EINVAL;
@@ -520,10 +517,19 @@ static int32_t cam_actuator_anti_noise(struct cam_actuator_ctrl_t *a_ctrl,
 		return -EINVAL;
 	}
 
+	/* Serialize the one-time EEPROM update across camera sessions. */
+	mutex_lock(&aan_lock);
+	if (aan_already_write) {
+		CAM_DBG(CAM_ACTUATOR, "aan, actuator EEPROM already verified");
+		mutex_unlock(&aan_lock);
+		return 0;
+	}
+
 	sid_backup = a_ctrl->io_master_info.cci_client->sid;
 	if ((AAN_AK7374_MASK >> 1) != sid_backup) {
 		CAM_DBG(CAM_ACTUATOR, "aan, SID 0x%x is not the AK7374 module",
 			sid_backup);
+		mutex_unlock(&aan_lock);
 		return 0;
 	}
 
@@ -648,6 +654,7 @@ out:
 		CAM_ERR(CAM_ACTUATOR,
 			"aan, AK7374 anti-noise sequence failed; a later init may retry");
 	}
+	mutex_unlock(&aan_lock);
 	return rc;
 }
 /* ----------------------------------------------------
