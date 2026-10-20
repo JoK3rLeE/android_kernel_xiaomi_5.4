@@ -66,6 +66,14 @@ config DRM_MSM_DSI
 	  Choose this option if you have a need for MIPI DSI connector
 	  support.
 
+config EXPOSURE_ADJUSTMENT
+	bool "Enable OLED exposure adjustment/DC dimming"
+	depends on DRM_MSM && DRM_MSM_DSI
+	default n
+	help
+	  Enable PCC-based exposure adjustment for OLED panels at low
+	  brightness. This is intended for panels with a validated PCC curve.
+
 config DRM_MSM_DSI_PLL
 	bool "Enable DSI PLL driver in MSM DRM"
 	depends on DRM_MSM_DSI && COMMON_CLK
