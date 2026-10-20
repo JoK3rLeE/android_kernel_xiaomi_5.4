@@ -807,7 +807,7 @@ int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
  */
 int dsi_panel_set_hbm(struct dsi_panel *panel, bool enable)
 {
-	int rc;
+	int rc = 0;
 #ifdef CONFIG_EXPOSURE_ADJUSTMENT
 	bool ea_disabled = false;
 	bool was_requested;
@@ -834,7 +834,7 @@ int dsi_panel_set_hbm(struct dsi_panel *panel, bool enable)
 		}
 #endif
 		panel->hbm_requested = enable;
-		return 0;
+		return rc;
 	}
 
 #ifdef CONFIG_EXPOSURE_ADJUSTMENT
