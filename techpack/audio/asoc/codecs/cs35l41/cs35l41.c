@@ -1895,6 +1895,7 @@ static int cs35l41_dsp_init(struct cs35l41_private *cs35l41)
 
 	dsp = &cs35l41->dsp;
 	dsp->part = "cs35l41";
+	dsp->fw = WM_ADSP_FW_SPK_PROT;
 	dsp->num = 1;
 	dsp->type = WMFW_HALO;
 	dsp->rev = 0;
