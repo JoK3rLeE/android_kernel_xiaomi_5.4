@@ -3503,9 +3503,29 @@ static int wm_halo_configure_mpu(struct wm_adsp *dsp)
 		"XM size 0x%x XM bank size 0x%x YM size 0x%x YM bank size 0x%x\n",
 		xm_sz, xm_bank_sz, ym_sz, ym_bank_sz);
 
+	/*
+	 * The access registers are 32-bit bank masks. Validate the reported
+	 * SRAM geometry before shifting so corrupt/unsupported system-info
+	 * values cannot trigger an undefined shift or silently unlock no banks.
+	 */
+	if (!xm_sz || !ym_sz || xm_sz % xm_bank_sz || ym_sz % ym_bank_sz) {
+		adsp_err(dsp, "Invalid HALO SRAM geometry (XM=%u/%u YM=%u/%u)\n",
+			 xm_sz, xm_bank_sz, ym_sz, ym_bank_sz);
+		ret = -EINVAL;
+		goto err;
+	}
+
+	if (xm_sz / xm_bank_sz > 32 || ym_sz / ym_bank_sz > 32) {
+		adsp_err(dsp, "HALO SRAM bank count exceeds access mask width\n");
+		ret = -EOVERFLOW;
+		goto err;
+	}
+
 	/* calculate amount of banks to unlock */
-	xm_acc_cfg = (1 << (xm_sz / xm_bank_sz)) - 1;
-	ym_acc_cfg = (1 << (ym_sz / ym_bank_sz)) - 1;
+	xm_acc_cfg = (xm_sz / xm_bank_sz == 32) ? U32_MAX :
+		     (BIT(xm_sz / xm_bank_sz) - 1);
+	ym_acc_cfg = (ym_sz / ym_bank_sz == 32) ? U32_MAX :
+		     (BIT(ym_sz / ym_bank_sz) - 1);
 
 	/* unlock MPU */
 	ret = regmap_write(regmap, dsp_base + HALO_MPU_LOCK_CONFIG,
