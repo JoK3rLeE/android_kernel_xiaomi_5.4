@@ -238,6 +238,10 @@
 #define HALO_SCRATCH3                        0x005d0
 #define HALO_SCRATCH4                        0x005d8
 #define HALO_CCM_CORE_CONTROL                0x41000
+#define HALO_SAMPLE_RATE_RX1                 0x00080
+#define HALO_SAMPLE_RATE_TX1                 0x00280
+#define HALO_DSP_RATE_SHIFT                  0
+#define HALO_DSP_RATE_MASK                   0x1f
 #define HALO_CORE_SOFT_RESET                 0x00010
 #define HALO_WDT_CONTROL                     0x47000
 
@@ -3495,6 +3499,27 @@ int wm_halo_init(struct wm_adsp *dsp)
 
 	dsp->ops = &wm_halo_ops;
 
+	if (dsp->n_rx_rates) {
+		dsp->rx_rate_cache = kcalloc(dsp->n_rx_rates,
+					     sizeof(*dsp->rx_rate_cache),
+					     GFP_KERNEL);
+		if (!dsp->rx_rate_cache)
+			return -ENOMEM;
+		memset(dsp->rx_rate_cache, 0x03, dsp->n_rx_rates);
+	}
+
+	if (dsp->n_tx_rates) {
+		dsp->tx_rate_cache = kcalloc(dsp->n_tx_rates,
+					     sizeof(*dsp->tx_rate_cache),
+					     GFP_KERNEL);
+		if (!dsp->tx_rate_cache) {
+			kfree(dsp->rx_rate_cache);
+			dsp->rx_rate_cache = NULL;
+			return -ENOMEM;
+		}
+		memset(dsp->tx_rate_cache, 0x03, dsp->n_tx_rates);
+	}
+
 	INIT_WORK(&dsp->boot_work, wm_adsp_boot_work);
 
 	return 0;
@@ -3511,6 +3536,11 @@ void wm_adsp2_remove(struct wm_adsp *dsp)
 		list_del(&ctl->list);
 		wm_adsp_free_ctl_blk(ctl);
 	}
+
+	kfree(dsp->rx_rate_cache);
+	dsp->rx_rate_cache = NULL;
+	kfree(dsp->tx_rate_cache);
+	dsp->tx_rate_cache = NULL;
 }
 EXPORT_SYMBOL_GPL(wm_adsp2_remove);
 
