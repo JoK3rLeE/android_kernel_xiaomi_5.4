@@ -8913,6 +8913,10 @@ int dsi_display_disable(struct dsi_display *display)
 		display->panel->panel_initialized = false;
 		display->panel->power_mode = SDE_MODE_DPMS_OFF;
 	}
+	/* The panel loses its FOD-HBM state when it is powered down. */
+	if (!dsi_panel_initialized(display->panel))
+		dsi_display_set_fod_ui(display, false);
+
 	mutex_unlock(&display->display_lock);
 	SDE_EVT32(SDE_EVTLOG_FUNC_EXIT);
 	return rc;
