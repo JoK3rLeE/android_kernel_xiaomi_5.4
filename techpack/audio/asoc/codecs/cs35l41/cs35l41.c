@@ -1177,6 +1177,25 @@ static int cs35l41_pcm_hw_params(struct snd_pcm_substream *substream,
 			return ret;
 	}
 
+	/*
+	 * HALO sample-rate slots use the same rate encoding as GLOBAL_FS.
+	 * Cache the selected rate for every active direction; wm_halo_event()
+	 * commits these values before enabling the DSP core.
+	 */
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		if (cs35l41->dsp.n_rx_rates && !cs35l41->dsp.rx_rate_cache)
+			return -EINVAL;
+		for (i = 0; i < cs35l41->dsp.n_rx_rates; i++)
+			cs35l41->dsp.rx_rate_cache[i] =
+				cs35l41_fs_rates[i < ARRAY_SIZE(cs35l41_fs_rates) ? i : 0].fs_cfg;
+	} else {
+		if (cs35l41->dsp.n_tx_rates && !cs35l41->dsp.tx_rate_cache)
+			return -EINVAL;
+		for (i = 0; i < cs35l41->dsp.n_tx_rates; i++)
+			cs35l41->dsp.tx_rate_cache[i] =
+				cs35l41_fs_rates[i < ARRAY_SIZE(cs35l41_fs_rates) ? i : 0].fs_cfg;
+	}
+
 	asp_wl = params_width(params);
 	asp_width = params_physical_width(params);
 
