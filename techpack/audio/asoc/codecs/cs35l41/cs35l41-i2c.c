@@ -16,6 +16,7 @@
 #include <linux/moduleparam.h>
 #include <linux/version.h>
 #include <linux/kernel.h>
+#include <linux/err.h>
 #include <linux/init.h>
 #include <linux/delay.h>
 #include <linux/i2c.h>
