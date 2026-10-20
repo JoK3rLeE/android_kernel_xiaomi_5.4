@@ -1085,8 +1085,10 @@ static int smb1390_probe(struct platform_device *pdev)
 	}
 
 	chip->cp_ws = wakeup_source_register(chip->dev, "qcom-chargepump");
-	if (!chip->cp_ws)
-		return rc;
+	if (!chip->cp_ws) {
+		pr_err("Failed to register charge pump wakeup source\n");
+		return -ENOMEM;
+	}
 
 	rc = smb1390_create_votables(chip);
 	if (rc < 0) {
