@@ -156,37 +156,37 @@ static int spk_id_probe(struct platform_device *pdev)
 	dev_dbg(&pdev->dev, "%s: device %s\n", __func__, pdev->name);
 	info->pinctrl = devm_pinctrl_get(&pdev->dev);
 	if (IS_ERR_OR_NULL(info->pinctrl)) {
+		ret = IS_ERR(info->pinctrl) ? PTR_ERR(info->pinctrl) : -EINVAL;
 		dev_err(&pdev->dev,
-			"%s: Cannot get speaker id gpio pinctrl:%ld\n",
-			__func__, PTR_ERR(info->pinctrl));
-		ret = PTR_ERR(info->pinctrl);
+			"%s: Cannot get speaker id gpio pinctrl: %d\n",
+			__func__, ret);
 		goto err_pctrl_get;
 	}
 
 	info->pull_down = pinctrl_lookup_state(info->pinctrl, "pull_down");
 	if (IS_ERR_OR_NULL(info->pull_down)) {
+		ret = IS_ERR(info->pull_down) ? PTR_ERR(info->pull_down) : -EINVAL;
 		dev_err(&pdev->dev,
-			"%s: Cannot get pull_down pinctrl state:%ld\n",
-			__func__, PTR_ERR(info->pull_down));
-		ret = PTR_ERR(info->pull_down);
+			"%s: Cannot get pull_down pinctrl state: %d\n",
+			__func__, ret);
 		goto err_lookup_state;
 	}
 
 	info->pull_up = pinctrl_lookup_state(info->pinctrl, "pull_up");
 	if (IS_ERR_OR_NULL(info->pull_up)) {
+		ret = IS_ERR(info->pull_up) ? PTR_ERR(info->pull_up) : -EINVAL;
 		dev_err(&pdev->dev,
-			"%s: Cannot get pull_up pinctrl state:%ld\n", __func__,
-			PTR_ERR(info->pull_up));
-		ret = PTR_ERR(info->pull_up);
+			"%s: Cannot get pull_up pinctrl state: %d\n",
+			__func__, ret);
 		goto err_lookup_state;
 	}
 
 	info->no_pull = pinctrl_lookup_state(info->pinctrl, "no_pull");
 	if (IS_ERR_OR_NULL(info->no_pull)) {
+		ret = IS_ERR(info->no_pull) ? PTR_ERR(info->no_pull) : -EINVAL;
 		dev_err(&pdev->dev,
-			"%s: Cannot get no_pull pinctrl state:%ld\n", __func__,
-			PTR_ERR(info->no_pull));
-		ret = PTR_ERR(info->no_pull);
+			"%s: Cannot get no_pull pinctrl state: %d\n",
+			__func__, ret);
 		goto err_lookup_state;
 	}
 
