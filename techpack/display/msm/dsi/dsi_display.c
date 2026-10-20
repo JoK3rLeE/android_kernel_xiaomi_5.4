@@ -5828,6 +5828,14 @@ static ssize_t sysfs_hbm_write(struct device *dev,
 		rc = 0;
 		goto out_unlock;
 	}
+	if (!display->panel->cur_mode ||
+			!display->panel->cur_mode->priv_info ||
+			!display->panel->cur_mode->priv_info->cmd_sets[
+				enable ? DSI_CMD_SET_DISP_HBM_ON :
+				DSI_CMD_SET_DISP_HBM_OFF].count) {
+		rc = -EOPNOTSUPP;
+		goto out_unlock;
+	}
 
 	rc = dsi_display_clk_ctrl(display->dsi_clk_handle,
 				  DSI_ALL_CLKS, DSI_CLK_ON);
