@@ -94,9 +94,15 @@ int ea_panel_mode_ctrl(struct dsi_panel *panel, bool enable)
 	if (!panel)
 		return -EINVAL;
 
+	/* A panel power cycle resets the hardware PCC block. */
+	if (!dsi_panel_initialized(panel)) {
+		WRITE_ONCE(pcc_backlight_enable, enable);
+		WRITE_ONCE(pcc_correction_active, false);
+		return 0;
+	}
+
 	if (READ_ONCE(pcc_backlight_enable) == enable) {
-		if (!READ_ONCE(last_level) && !enable &&
-				dsi_panel_initialized(panel)) {
+		if (!READ_ONCE(last_level) && !enable) {
 			rc = ea_panel_send_pcc(panel, ELVSS_OFF_THRESHOLD);
 			if (!rc)
 				WRITE_ONCE(pcc_correction_active, false);
@@ -106,8 +112,7 @@ int ea_panel_mode_ctrl(struct dsi_panel *panel, bool enable)
 	}
 
 	/* Deactivate PCC correction before lowering the physical backlight. */
-	if (!enable && READ_ONCE(pcc_correction_active) &&
-			dsi_panel_initialized(panel)) {
+	if (!enable && READ_ONCE(pcc_correction_active)) {
 		rc = ea_panel_send_pcc(panel, ELVSS_OFF_THRESHOLD);
 		if (rc)
 			return rc;
@@ -115,14 +120,9 @@ int ea_panel_mode_ctrl(struct dsi_panel *panel, bool enable)
 	}
 
 	WRITE_ONCE(pcc_backlight_enable, enable);
-
-	/* The next backlight update will apply the selected mode after power-on. */
-	if (!dsi_panel_initialized(panel))
-		return 0;
-
 	rc = dsi_panel_set_backlight(panel, READ_ONCE(last_level));
 	if (rc)
-		pr_err("exposure adjustment: backlight update failed, rc=%d\n", rc);
+		pr_err("exposure adjustment: backlight update failed, rc=%d\\n", rc);
 
 	return 0;
 }
