@@ -1962,20 +1962,28 @@ static int cs35l41_dsp_init(struct cs35l41_private *cs35l41)
 	ret = regmap_write(cs35l41->regmap, CS35L41_DSP1_RX5_SRC,
 			   CS35L41_INPUT_SRC_VPMON);
 	if (ret < 0)
-		return ret;
+		goto err_dsp;
 
 	ret = regmap_write(cs35l41->regmap, CS35L41_DSP1_RX6_SRC,
 			   CS35L41_INPUT_SRC_CLASSH);
 	if (ret < 0)
-		return ret;
+		goto err_dsp;
 
 	ret = regmap_write(cs35l41->regmap, CS35L41_DSP1_RX7_SRC,
 			   CS35L41_INPUT_SRC_TEMPMON);
 	if (ret < 0)
-		return ret;
+		goto err_dsp;
 
-	return regmap_write(cs35l41->regmap, CS35L41_DSP1_RX8_SRC,
-			    CS35L41_INPUT_SRC_RSVD);
+	ret = regmap_write(cs35l41->regmap, CS35L41_DSP1_RX8_SRC,
+			   CS35L41_INPUT_SRC_RSVD);
+	if (ret < 0)
+		goto err_dsp;
+
+	return 0;
+
+err_dsp:
+	wm_adsp2_remove(dsp);
+	return ret;
 }
 
 int cs35l41_probe(struct cs35l41_private *cs35l41,
@@ -2145,7 +2153,6 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 	ret = cs35l41_dsp_init(cs35l41);
 	if (ret < 0) {
 		dev_err(cs35l41->dev, "DSP initialization failed: %d\n", ret);
-		wm_adsp2_remove(&cs35l41->dsp);
 		goto err;
 	}
 
