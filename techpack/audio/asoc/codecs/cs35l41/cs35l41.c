@@ -1164,19 +1164,13 @@ static int cs35l41_pcm_hw_params(struct snd_pcm_substream *substream,
 	}
 
 	/*
-	 * The HALO rate fields use the GLOBAL_FS encoding. Cache the selected
-	 * rate for every slot in the active direction; the HALO event commits
-	 * the cache before the DSP core is enabled.
+	 * The HALO rate fields use the GLOBAL_FS encoding. Update the cache
+	 * before boot, and write the registers immediately if the DSP remains
+	 * running across a stream reconfiguration.
 	 */
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		for (i = 0; i < cs35l41->dsp.n_rx_rates; i++)
-			cs35l41->dsp.rx_rate_cache[i] = rate_cfg;
-	} else {
-		for (i = 0; i < cs35l41->dsp.n_tx_rates; i++)
-			cs35l41->dsp.tx_rate_cache[i] = rate_cfg;
-	}
-
-	return 0;
+	return wm_halo_set_sample_rate(&cs35l41->dsp,
+				       substream->stream == SNDRV_PCM_STREAM_PLAYBACK,
+				       rate_cfg);
 }
 
 static int cs35l41_get_clk_config(int freq)
