@@ -604,7 +604,7 @@ static int cs35l41_otp_unpack(void *data)
 	return 0;
 }
 
-#define CS35L41_IRQ_REGMAP(_expr) do { \
+#define _expr do { \
 	ret = (_expr); \
 	if (ret) \
 		dev_err(cs35l41->dev, "IRQ register operation failed: %d\n", ret); \
@@ -761,6 +761,8 @@ static irqreturn_t cs35l41_irq(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+#undef CS35L41_IRQ_REGMAP
+
 static const struct reg_sequence cs35l41_pup_patch[] = {
 	{ 0x00000040, 0x00000055 }, { 0x00000040, 0x000000AA },
 	{ 0x00002084, 0x002F1AA0 }, { 0x00000040, 0x000000CC },
@@ -818,8 +820,8 @@ static int cs35l41_main_amp_event(struct snd_soc_dapm_widget *w,
 					cs35l41, CSPL_MBOX_CMD_PAUSE);
 		}
 
-		tmp = CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_PWR_CTRL1,
-					 CS35L41_GLOBAL_EN_MASK, 0));
+		tmp = regmap_update_bits(cs35l41->regmap, CS35L41_PWR_CTRL1,
+					 CS35L41_GLOBAL_EN_MASK, 0);
 		if (!ret)
 			ret = tmp;
 
@@ -840,8 +842,8 @@ static int cs35l41_main_amp_event(struct snd_soc_dapm_widget *w,
 	return ret;
 
 rollback_power_up:
-	CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_PWR_CTRL1,
-			   CS35L41_GLOBAL_EN_MASK, 0));
+	regmap_update_bits(cs35l41->regmap, CS35L41_PWR_CTRL1,
+			   CS35L41_GLOBAL_EN_MASK, 0);
 	usleep_range(1000, 1100);
 	regmap_multi_reg_write_bypassed(cs35l41->regmap, cs35l41_pdn_patch,
 					ARRAY_SIZE(cs35l41_pdn_patch));
@@ -1314,8 +1316,8 @@ static int cs35l41_codec_set_sysclk(struct snd_soc_component *codec, int clk_id,
 	return 0;
 
 err_disable:
-	CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_PLL_CLK_CTRL,
-			   CS35L41_PLL_CLK_EN_MASK, 0));
+	regmap_update_bits(cs35l41->regmap, CS35L41_PLL_CLK_CTRL,
+			   CS35L41_PLL_CLK_EN_MASK, 0);
 	dev_err(codec->dev, "Failed to configure PLL clock: %d\n", ret);
 	return ret;
 }
@@ -1490,114 +1492,114 @@ static int cs35l41_codec_probe(struct snd_soc_component *codec)
 
 	/* Optional */
 	if (cs35l41->pdata.sclk_frc)
-		CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
+		CS35L41_CHECK_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
 				   CS35L41_SCLK_FRC_MASK,
 				   cs35l41->pdata.sclk_frc
-					   << CS35L41_SCLK_FRC_SHIFT)));
+					   << CS35L41_SCLK_FRC_SHIFT));
 
 	if (cs35l41->pdata.lrclk_frc)
-		CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
+		CS35L41_CHECK_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
 				   CS35L41_LRCLK_FRC_MASK,
 				   cs35l41->pdata.lrclk_frc
-					   << CS35L41_LRCLK_FRC_SHIFT)));
+					   << CS35L41_LRCLK_FRC_SHIFT));
 
 	if (cs35l41->pdata.amp_gain_zc)
-		CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_AMP_GAIN_CTRL,
+		CS35L41_CHECK_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_AMP_GAIN_CTRL,
 				   CS35L41_AMP_GAIN_ZC_MASK,
 				   cs35l41->pdata.amp_gain_zc
-					   << CS35L41_AMP_GAIN_ZC_SHIFT)));
+					   << CS35L41_AMP_GAIN_ZC_SHIFT));
 
 	if (cs35l41->pdata.bst_vctrl)
-		CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_BSTCVRT_VCTRL1,
+		CS35L41_CHECK_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_BSTCVRT_VCTRL1,
 				   CS35L41_BST_CTL_MASK,
-				   cs35l41->pdata.bst_vctrl)));
+				   cs35l41->pdata.bst_vctrl));
 
 	if (cs35l41->pdata.temp_warn_thld)
-		CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_DTEMP_WARN_THLD,
+		CS35L41_CHECK_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_DTEMP_WARN_THLD,
 				   CS35L41_TEMP_THLD_MASK,
-				   cs35l41->pdata.temp_warn_thld)));
+				   cs35l41->pdata.temp_warn_thld));
 
 	if (cs35l41->pdata.dout_hiz <= CS35L41_ASP_DOUT_HIZ_MASK &&
 	    cs35l41->pdata.dout_hiz >= 0)
-		CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_SP_HIZ_CTRL,
+		CS35L41_CHECK_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_SP_HIZ_CTRL,
 				   CS35L41_ASP_DOUT_HIZ_MASK,
-				   cs35l41->pdata.dout_hiz)));
+				   cs35l41->pdata.dout_hiz));
 
 	if (cs35l41->pdata.ng_enable) {
-		CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_MIXER_NGATE_CH1_CFG,
+		CS35L41_CHECK_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_MIXER_NGATE_CH1_CFG,
 				   CS35L41_NG_ENABLE_MASK,
-				   CS35L41_NG_ENABLE_MASK)));
-		CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_MIXER_NGATE_CH2_CFG,
+				   CS35L41_NG_ENABLE_MASK));
+		CS35L41_CHECK_REGMAP(regmap_update_bits(cs35l41->regmap, CS35L41_MIXER_NGATE_CH2_CFG,
 				   CS35L41_NG_ENABLE_MASK,
-				   CS35L41_NG_ENABLE_MASK)));
+				   CS35L41_NG_ENABLE_MASK));
 
 		if (cs35l41->pdata.ng_pcm_thld) {
-			CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap,
+			CS35L41_CHECK_REGMAP(regmap_update_bits(cs35l41->regmap,
 					   CS35L41_MIXER_NGATE_CH1_CFG,
 					   CS35L41_NG_THLD_MASK,
-					   cs35l41->pdata.ng_pcm_thld)));
-			CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap,
+					   cs35l41->pdata.ng_pcm_thld));
+			CS35L41_CHECK_REGMAP(regmap_update_bits(cs35l41->regmap,
 					   CS35L41_MIXER_NGATE_CH2_CFG,
 					   CS35L41_NG_THLD_MASK,
-					   cs35l41->pdata.ng_pcm_thld)));
+					   cs35l41->pdata.ng_pcm_thld));
 		}
 
 		if (cs35l41->pdata.ng_delay) {
-			CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap,
+			CS35L41_CHECK_REGMAP(regmap_update_bits(cs35l41->regmap,
 					   CS35L41_MIXER_NGATE_CH1_CFG,
 					   CS35L41_NG_DELAY_MASK,
 					   cs35l41->pdata.ng_delay
-						   << CS35L41_NG_DELAY_SHIFT)));
-			CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap,
+						   << CS35L41_NG_DELAY_SHIFT));
+			CS35L41_CHECK_REGMAP(regmap_update_bits(cs35l41->regmap,
 					   CS35L41_MIXER_NGATE_CH2_CFG,
 					   CS35L41_NG_DELAY_MASK,
 					   cs35l41->pdata.ng_delay
-						   << CS35L41_NG_DELAY_SHIFT)));
+						   << CS35L41_NG_DELAY_SHIFT));
 		}
 	}
 
 	if (classh->classh_algo_enable) {
 		if (classh->classh_bst_override)
-			CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap,
+			CS35L41_CHECK_REGMAP(regmap_update_bits(cs35l41->regmap,
 					   CS35L41_BSTCVRT_VCTRL2,
 					   CS35L41_BST_CTL_SEL_MASK,
-					   CS35L41_BST_CTL_SEL_REG)));
+					   CS35L41_BST_CTL_SEL_REG));
 		if (classh->classh_bst_max_limit)
-			CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(cs35l41->regmap,
+			CS35L41_CHECK_REGMAP(regmap_update_bits(cs35l41->regmap,
 					   CS35L41_BSTCVRT_VCTRL2,
 					   CS35L41_BST_LIM_MASK,
 					   classh->classh_bst_max_limit
-						   << CS35L41_BST_LIM_SHIFT)));
+						   << CS35L41_BST_LIM_SHIFT));
 		if (classh->classh_mem_depth)
-			CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(
+			CS35L41_CHECK_REGMAP(regmap_update_bits(
 				cs35l41->regmap, CS35L41_CLASSH_CFG,
 				CS35L41_CH_MEM_DEPTH_MASK,
 				classh->classh_mem_depth
-					<< CS35L41_CH_MEM_DEPTH_SHIFT)));
+					<< CS35L41_CH_MEM_DEPTH_SHIFT));
 		if (classh->classh_headroom)
-			CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(
+			CS35L41_CHECK_REGMAP(regmap_update_bits(
 				cs35l41->regmap, CS35L41_CLASSH_CFG,
 				CS35L41_CH_HDRM_CTL_MASK,
 				classh->classh_headroom
-					<< CS35L41_CH_HDRM_CTL_SHIFT)));
+					<< CS35L41_CH_HDRM_CTL_SHIFT));
 		if (classh->classh_release_rate)
-			CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(
+			CS35L41_CHECK_REGMAP(regmap_update_bits(
 				cs35l41->regmap, CS35L41_CLASSH_CFG,
 				CS35L41_CH_REL_RATE_MASK,
 				classh->classh_release_rate
-					<< CS35L41_CH_REL_RATE_SHIFT)));
+					<< CS35L41_CH_REL_RATE_SHIFT));
 		if (classh->classh_wk_fet_delay)
-			CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(
+			CS35L41_CHECK_REGMAP(regmap_update_bits(
 				cs35l41->regmap, CS35L41_WKFET_CFG,
 				CS35L41_CH_WKFET_DLY_MASK,
 				classh->classh_wk_fet_delay
-					<< CS35L41_CH_WKFET_DLY_SHIFT)));
+					<< CS35L41_CH_WKFET_DLY_SHIFT));
 		if (classh->classh_wk_fet_thld)
-			CS35L41_CHECK_REGMAP(CS35L41_IRQ_REGMAP(regmap_update_bits(
+			CS35L41_CHECK_REGMAP(regmap_update_bits(
 				cs35l41->regmap, CS35L41_WKFET_CFG,
 				CS35L41_CH_WKFET_THLD_MASK,
 				classh->classh_wk_fet_thld
-					<< CS35L41_CH_WKFET_THLD_SHIFT)));
+					<< CS35L41_CH_WKFET_THLD_SHIFT));
 	}
 
 	cs35l41->component = codec;
@@ -1623,9 +1625,6 @@ static int cs35l41_codec_probe(struct snd_soc_component *codec)
 }
 
 #undef CS35L41_CHECK_REGMAP
-
-#undef CS35L41_IRQ_REGMAP
-
 static int cs35l41_irq_gpio_config(struct cs35l41_private *cs35l41)
 {
 	struct irq_cfg *irq_gpio_cfg1 = &cs35l41->pdata.irq_config1;
