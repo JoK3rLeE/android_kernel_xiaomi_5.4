@@ -3,6 +3,7 @@ config SND_SOC_CS35L41
 	tristate "Cirrus Logic CS35L41 smart amplifier"
 	depends on I2C && OF && FW_LOADER && REGULATOR && GPIOLIB
 	select REGMAP_I2C
+	select SND_SOC_COMPRESS
 	help
 	  Enable support for the Cirrus Logic CS35L41 smart amplifier
 	  used by Xiaomi Cepheus.
