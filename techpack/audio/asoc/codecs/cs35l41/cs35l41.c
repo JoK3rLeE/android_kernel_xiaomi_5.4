@@ -1965,8 +1965,14 @@ static int cs35l41_dsp_init(struct cs35l41_private *cs35l41)
 	dsp->n_rx_rates = CS35L41_DSP_N_RX_RATES;
 	dsp->n_tx_rates = CS35L41_DSP_N_TX_RATES;
 	ret = wm_halo_init(dsp);
-	if (ret < 0)
+	if (ret < 0) {
+		/* wm_halo_init() initializes the lists/work item before it can
+		 * fail allocating rate caches. Keep teardown safe and centralized
+		 * for every DSP initialization failure path.
+		 */
+		wm_adsp2_remove(dsp);
 		return ret;
+	}
 
 	cs35l41->halo_booted = false;
 
