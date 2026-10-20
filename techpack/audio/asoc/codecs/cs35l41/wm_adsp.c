@@ -3357,6 +3357,41 @@ static int wm_halo_set_rate_block(struct wm_adsp *dsp, unsigned int rate_base,
 	return 0;
 }
 
+int wm_halo_set_sample_rate(struct wm_adsp *dsp, bool playback, u8 rate)
+{
+	int ret = 0, i;
+
+	mutex_lock(&dsp->pwr_lock);
+
+	if (playback) {
+		if (dsp->n_rx_rates && !dsp->rx_rate_cache) {
+			ret = -EINVAL;
+			goto out;
+		}
+		for (i = 0; i < dsp->n_rx_rates; i++)
+			dsp->rx_rate_cache[i] = rate;
+		if (dsp->running)
+			ret = wm_halo_set_rate_block(dsp, HALO_SAMPLE_RATE_RX1,
+						     dsp->n_rx_rates,
+						     dsp->rx_rate_cache);
+	} else {
+		if (dsp->n_tx_rates && !dsp->tx_rate_cache) {
+			ret = -EINVAL;
+			goto out;
+		}
+		for (i = 0; i < dsp->n_tx_rates; i++)
+			dsp->tx_rate_cache[i] = rate;
+		if (dsp->running)
+			ret = wm_halo_set_rate_block(dsp, HALO_SAMPLE_RATE_TX1,
+						     dsp->n_tx_rates,
+						     dsp->tx_rate_cache);
+	}
+
+out:
+	mutex_unlock(&dsp->pwr_lock);
+	return ret;
+}
+
 static int wm_halo_clear_stream_arb(struct wm_adsp *dsp)
 {
 	struct regmap *regmap = dsp->regmap;
