@@ -5777,9 +5777,60 @@ static DEVICE_ATTR(fod_hbm, 0220,
 			NULL,
 			sysfs_fod_hbm_write);
 
+/*
+ * Manual HBM is separate from fingerprint HBM: it uses the panel's
+ * dispparam-hbm-on/off command sets and is restored after panel re-enable.
+ */
+static ssize_t sysfs_hbm_write(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct dsi_display *display;
+	bool enable;
+	int rc, clk_rc;
+
+	display = dev_get_drvdata(dev);
+	if (!display || !display->panel) {
+		pr_err("Invalid display\n");
+		return -EINVAL;
+	}
+
+	rc = kstrtobool(buf, &enable);
+	if (rc)
+		return rc;
+
+	mutex_lock(&display->panel->panel_lock);
+	if (!display->panel->panel_initialized) {
+		rc = dsi_panel_set_hbm(display->panel, enable);
+		goto out_unlock;
+	}
+
+	rc = dsi_display_clk_ctrl(display->dsi_clk_handle,
+				  DSI_ALL_CLKS, DSI_CLK_ON);
+	if (rc) {
+		pr_err("hbm: failed to enable DSI clocks: %d\n", rc);
+		goto out_unlock;
+	}
+
+	rc = dsi_panel_set_hbm(display->panel, enable);
+	clk_rc = dsi_display_clk_ctrl(display->dsi_clk_handle,
+				      DSI_ALL_CLKS, DSI_CLK_OFF);
+	if (!rc)
+		rc = clk_rc;
+
+out_unlock:
+	mutex_unlock(&display->panel->panel_lock);
+	if (rc)
+		return rc;
+
+	return count;
+}
+
+static DEVICE_ATTR(hbm, 0220, NULL, sysfs_hbm_write);
+
 static struct attribute *display_fs_attrs[] = {
 	&dev_attr_fod_ui.attr,
 	&dev_attr_fod_hbm.attr,
+	&dev_attr_hbm.attr,
 	NULL,
 };
 
