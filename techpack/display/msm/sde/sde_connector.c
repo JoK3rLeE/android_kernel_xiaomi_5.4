@@ -871,7 +871,6 @@ static int _sde_connector_update_dirty_properties(
 
 void sde_connector_update_fod_hbm(struct drm_connector *connector)
 {
-	static atomic_t effective_status = ATOMIC_INIT(false);
 	struct sde_crtc_state *cstate;
 	struct sde_connector *c_conn;
 	struct dsi_display *display;
@@ -899,22 +898,20 @@ void sde_connector_update_fod_hbm(struct drm_connector *connector)
 	status = cstate->fod_dim_layer != NULL;
 
 	mutex_lock(&display->panel->panel_lock);
-	if (atomic_read(&effective_status) == status) {
+	/* Manual HBM owns the panel brightness mode while it is requested. */
+	if (display->panel->hbm_requested ||
+			atomic_read(&display->fod_ui) == status) {
 		mutex_unlock(&display->panel->panel_lock);
 		return;
 	}
 
 	rc = dsi_panel_set_fod_hbm(display->panel, status);
 	if (!rc)
-		atomic_set(&effective_status, status);
+		dsi_display_set_fod_ui(display, status);
 	mutex_unlock(&display->panel->panel_lock);
 
-	if (rc) {
+	if (rc)
 		SDE_ERROR("failed to set FOD HBM state %d: %d\n", status, rc);
-		return;
-	}
-
-	dsi_display_set_fod_ui(display, status);
 }
 
 struct sde_connector_dyn_hdr_metadata *sde_connector_get_dyn_hdr_meta(
