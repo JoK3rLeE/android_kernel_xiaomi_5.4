@@ -5918,7 +5918,7 @@ static ssize_t sysfs_ea_enable_write(struct device *dev,
 	if (rc)
 		goto out_unlock;
 
-	ea_panel_mode_ctrl(display->panel, enable);
+	rc = ea_panel_mode_ctrl(display->panel, enable);
 	clk_rc = dsi_display_clk_ctrl(display->dsi_clk_handle,
 				      DSI_ALL_CLKS, DSI_CLK_OFF);
 	if (!rc)
