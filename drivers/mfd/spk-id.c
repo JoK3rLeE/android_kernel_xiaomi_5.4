@@ -32,7 +32,8 @@ struct spk_id_info {
 	int state;
 };
 
-static struct spk_id_info *spk_id_get_info(struct device_node *np)
+static struct spk_id_info *spk_id_get_info(struct device_node *np,
+					      struct platform_device **pdev_out)
 {
 	struct platform_device *pdev;
 	struct spk_id_info *info;
@@ -49,31 +50,40 @@ static struct spk_id_info *spk_id_get_info(struct device_node *np)
 	}
 
 	info = dev_get_drvdata(&pdev->dev);
-	if (!info)
+	if (!info) {
 		dev_err(&pdev->dev, "%s: cannot find spk id info\n", __func__);
+		put_device(&pdev->dev);
+		return NULL;
+	}
 
+	/* Keep the platform device alive while its pinctrl data is in use. */
+	*pdev_out = pdev;
 	return info;
 }
 
 int spk_id_get_pin_3state(struct device_node *np)
 {
+	struct platform_device *pdev = NULL;
 	struct spk_id_info *info;
 	int pu = 0;
 	int pd = 0;
+	int ret;
 
-	info = spk_id_get_info(np);
+	info = spk_id_get_info(np, &pdev);
 	if (!info)
 		return -EINVAL;
 
 	if (IS_ERR_OR_NULL(info->pinctrl)) {
 		pr_err("%s: pin ctrl is invalid:%ld\n", __func__,
 		       PTR_ERR(info->pinctrl));
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out;
 	}
 
 	if (!gpio_is_valid(info->gpio)) {
 		pr_err("%s: gpio is invalid:%d\n", __func__, info->gpio);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out;
 	}
 
 	pinctrl_select_state(info->pinctrl, info->pull_down);
@@ -98,7 +108,10 @@ int spk_id_get_pin_3state(struct device_node *np)
 		info->state = PIN_FLOAT;
 	}
 
-	return info->state;
+	ret = info->state;
+out:
+	put_device(&pdev->dev);
+	return ret;
 }
 EXPORT_SYMBOL(spk_id_get_pin_3state);
 
