@@ -20,7 +20,7 @@ struct dsi_panel;
 	((EXPOSURE_ADJUSTMENT_MAX - EXPOSURE_ADJUSTMENT_MIN) / \
 	 ELVSS_OFF_THRESHOLD)
 
-void ea_panel_mode_ctrl(struct dsi_panel *panel, bool enable);
+int ea_panel_mode_ctrl(struct dsi_panel *panel, bool enable);
 bool ea_panel_is_enabled(void);
 u32 ea_panel_calc_backlight(struct dsi_panel *panel, u32 bl_lvl);
 
