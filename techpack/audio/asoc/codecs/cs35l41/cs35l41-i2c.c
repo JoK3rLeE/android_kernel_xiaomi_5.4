@@ -91,11 +91,31 @@ static int cs35l41_i2c_probe(struct i2c_client *client,
 static int cs35l41_i2c_remove(struct i2c_client *client)
 {
 	struct cs35l41_private *cs35l41 = i2c_get_clientdata(client);
+	unsigned int i;
+	int ret;
 
-	regmap_write(cs35l41->regmap, CS35L41_IRQ1_MASK1, 0xFFFFFFFF);
+	/* Mask every IRQ1 status bank before unregistering the component.
+	 * Masking only bank 1 leaves the other banks able to assert the shared
+	 * interrupt while teardown is in progress.
+	 */
+	for (i = 0; i < 4; i++) {
+		ret = regmap_write(cs35l41->regmap,
+				   CS35L41_IRQ1_MASK1 +
+				   (i * CS35L41_REGSTRIDE), 0xFFFFFFFF);
+		if (ret < 0)
+			dev_warn(cs35l41->dev,
+				 "Failed to mask IRQ bank %u during removal: %d\\n",
+				 i + 1, ret);
+	}
+
 	snd_soc_unregister_component(cs35l41->dev);
 	wm_adsp2_remove(&cs35l41->dsp);
-	regulator_bulk_disable(cs35l41->num_supplies, cs35l41->supplies);
+
+	ret = regulator_bulk_disable(cs35l41->num_supplies, cs35l41->supplies);
+	if (ret < 0)
+		dev_err(cs35l41->dev,
+			"Failed to disable supplies during removal: %d\\n", ret);
+
 	return 0;
 }
 
