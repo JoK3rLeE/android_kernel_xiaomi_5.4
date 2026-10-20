@@ -5824,18 +5824,16 @@ static ssize_t sysfs_hbm_write(struct device *dev,
 			dsi_display_set_fod_ui(display, false);
 		goto out_unlock;
 	}
+	if (!enable && !display->panel->hbm_requested) {
+		rc = 0;
+		goto out_unlock;
+	}
 
 	rc = dsi_display_clk_ctrl(display->dsi_clk_handle,
 				  DSI_ALL_CLKS, DSI_CLK_ON);
 	if (rc) {
 		pr_err("hbm: failed to enable DSI clocks: %d\n", rc);
 		goto out_unlock;
-	}
-
-	/* Don't send a manual HBM-off command when manual HBM wasn't active. */
-	if (!enable && !display->panel->hbm_requested) {
-		rc = 0;
-		goto clock_off;
 	}
 
 	/* FOD HBM and manual HBM are mutually exclusive panel modes. */
