@@ -647,6 +647,14 @@ static irqreturn_t cs35l41_irq(int irq, void *data)
 		return IRQ_NONE;
 
 	/*
+	 * A different unmasked source can trigger this shared handler while
+	 * masked status bits remain latched. Process only unmasked sources;
+	 * otherwise stale masked error bits can trigger protection recovery.
+	 */
+	for (i = 0; i < ARRAY_SIZE(status); i++)
+		status[i] &= ~masks[i];
+
+	/*
 	 * Only accept a mailbox completion when that source is unmasked.
 	 * Another active interrupt can enter this handler while the mailbox
 	 * source is masked; treating its stale status bit as a completion can
