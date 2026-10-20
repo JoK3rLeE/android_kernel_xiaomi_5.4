@@ -104,14 +104,6 @@ struct wm_adsp {
 	bool unlock_all;
 	unsigned int n_rx_rates;
 	unsigned int n_tx_rates;
-	u8 *rx_rate_cache;
-	u8 *tx_rate_cache;
-
-	/* Xiaomi CS35L41 speaker-protection calibration defaults/state. */
-	u32 cal_z;
-	u32 ambient;
-	u32 cal_status;
-	u32 cal_chksum;
 
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_root;
@@ -177,10 +169,6 @@ void wm_adsp2_remove(struct wm_adsp *dsp);
 int wm_adsp2_component_probe(struct wm_adsp *dsp, struct snd_soc_component *component);
 int wm_adsp2_component_remove(struct wm_adsp *dsp, struct snd_soc_component *component);
 int wm_halo_init(struct wm_adsp *dsp);
-int wm_halo_early_event(struct snd_soc_dapm_widget *w,
-			struct snd_kcontrol *kcontrol, int event);
-int wm_halo_event(struct snd_soc_dapm_widget *w,
-		  struct snd_kcontrol *kcontrol, int event);
 
 int wm_adsp1_event(struct snd_soc_dapm_widget *w,
 		   struct snd_kcontrol *kcontrol, int event);
