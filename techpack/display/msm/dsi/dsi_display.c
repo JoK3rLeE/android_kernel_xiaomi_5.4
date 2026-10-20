@@ -5825,8 +5825,20 @@ static ssize_t sysfs_hbm_write(struct device *dev,
 		goto out_unlock;
 	}
 	if (!enable && !display->panel->hbm_requested) {
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+		/*
+		 * dsi_panel_set_hbm() clears hbm_requested after the panel command
+		 * succeeds, even if restoring Exposure Adjustment then fails.
+		 * Allow a repeated "off" request to retry that pending restore.
+		 */
+		if (!display->panel->resend_ea_hbm) {
+			rc = 0;
+			goto out_unlock;
+		}
+#else
 		rc = 0;
 		goto out_unlock;
+#endif
 	}
 	if (!display->panel->cur_mode ||
 			!display->panel->cur_mode->priv_info ||
