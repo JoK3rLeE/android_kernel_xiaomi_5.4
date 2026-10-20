@@ -4748,9 +4748,14 @@ static int sde_crtc_fod_atomic_check(struct sde_crtc_state *cstate,
 		if (pstates[plane_idx].stage < dim_layer_stage)
 			continue;
 
-		/* Leave one hardware blend stage available for the FOD layer. */
+		/*
+		 * Reserve a stage for the FOD layer without exceeding either the
+		 * generic stage enum or this SoC's actual mixer blend-stage count.
+		 */
 		if (pstates[plane_idx].stage >=
-				SDE_STAGE_MAX - SDE_STAGE_0 - 1) {
+				SDE_STAGE_MAX - SDE_STAGE_0 - 1 ||
+			pstates[plane_idx].sde_pstate->stage + 1 >=
+				kms->catalog->mixer[0].sblk->maxblendstages) {
 			SDE_ERROR("no blend stage available for FOD dim layer\n");
 			cstate->fod_dim_layer = NULL;
 			return -EINVAL;
