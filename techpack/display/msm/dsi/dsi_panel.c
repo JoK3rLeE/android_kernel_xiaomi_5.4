@@ -821,7 +821,7 @@ int dsi_panel_set_hbm(struct dsi_panel *panel, bool enable)
 	was_requested = panel->hbm_requested;
 #endif
 
-	if (panel->cur_mode && panel->cur_mode->priv_info &&
+	if (!panel->cur_mode || !panel->cur_mode->priv_info ||
 			!panel->cur_mode->priv_info->cmd_sets[type].count)
 		return -EOPNOTSUPP;
 
