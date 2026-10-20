@@ -4001,24 +4001,25 @@ static int wm_adsp_k_ctl_put(struct wm_adsp *dsp, const char *name, int value)
 
 static int wm_adsp_k_ctl_get(struct wm_adsp *dsp, const char *name)
 {
-	struct snd_kcontrol *kctl = NULL;
-	struct snd_ctl_elem_value ucontrol;
+	struct snd_kcontrol *kctl;
+	struct snd_ctl_elem_value ucontrol = { 0 };
 	struct snd_soc_card *card = dsp->component->card;
-
-	int value = 0;
+	__be32 be_value;
+	int ret;
 
 	kctl = snd_soc_card_get_kcontrol(card, name);
-	if (kctl == NULL) {
+	if (!kctl) {
 		adsp_warn(dsp, "%s: %s isn't found\n", __func__, name);
-		return -1;
+		return -ENOENT;
 	}
 
-	wm_coeff_k_get(kctl, &ucontrol);
-	memcpy((char *)&value, (char *)ucontrol.value.bytes.data,
-	       sizeof(value));
-	value = be32_to_cpu(value);
+	ret = wm_coeff_k_get(kctl, &ucontrol);
+	if (ret)
+		return ret;
 
-	adsp_dbg(dsp, "%s: %s:0x%x\n", __func__, kctl->id.name, value);
+	memcpy(&be_value, ucontrol.value.bytes.data, sizeof(be_value));
+	adsp_dbg(dsp, "%s: %s:0x%x\n", __func__, kctl->id.name,
+		 be32_to_cpu(be_value));
 
 	return 0;
 }
