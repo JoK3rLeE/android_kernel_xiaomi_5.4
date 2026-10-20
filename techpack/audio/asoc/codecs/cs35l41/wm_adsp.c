@@ -3830,7 +3830,7 @@ int wm_halo_event(struct snd_soc_dapm_widget *w, struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_dapm_to_component(w->dapm);
 	struct wm_adsp *dsps = snd_soc_component_get_drvdata(codec);
 	struct wm_adsp *dsp = &dsps[w->shift];
-	int ret;
+	int ret = 0, cleanup_ret;
 
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
@@ -3913,11 +3913,15 @@ int wm_halo_event(struct snd_soc_dapm_widget *w, struct snd_kcontrol *kcontrol,
 
 		dsp->running = false;
 
-		regmap_update_bits(dsp->regmap,
-				   dsp->base + HALO_CCM_CORE_CONTROL,
-				   HALO_CORE_EN, 0);
+		ret = regmap_update_bits(dsp->regmap,
+					 dsp->base + HALO_CCM_CORE_CONTROL,
+					 HALO_CORE_EN, 0);
+		if (ret)
+			adsp_err(dsp, "Failed to disable HALO core: %d\n", ret);
 
-		wm_halo_clear_stream_arb(dsp);
+		cleanup_ret = wm_halo_clear_stream_arb(dsp);
+		if (!ret)
+			ret = cleanup_ret;
 
 		if (wm_adsp_fw[dsp->fw].num_caps != 0)
 			wm_adsp_buffer_free(dsp);
@@ -3930,9 +3934,10 @@ int wm_halo_event(struct snd_soc_dapm_widget *w, struct snd_kcontrol *kcontrol,
 		break;
 	}
 
-	return 0;
+	return ret;
 err:
 	mutex_unlock(&dsp->pwr_lock);
+	dsp->running = false;
 	regmap_update_bits(dsp->regmap, dsp->base + HALO_CCM_CORE_CONTROL,
 			   HALO_CORE_EN, 0);
 	return ret;
