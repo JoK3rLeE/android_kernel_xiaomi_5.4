@@ -481,6 +481,12 @@ static void sde_crtc_destroy(struct drm_crtc *crtc)
 	if (sde_crtc->sysfs_dev)
 		device_unregister(sde_crtc->sysfs_dev);
 
+	/*
+	 * early_wakeup_store() queues work on the shared display worker.
+	 * Drain it after removing the sysfs entry and before freeing sde_crtc.
+	 */
+	kthread_flush_work(&sde_crtc->early_wakeup_work);
+
 	if (sde_crtc->blob_info)
 		drm_property_blob_put(sde_crtc->blob_info);
 	msm_property_destroy(&sde_crtc->property_info);
