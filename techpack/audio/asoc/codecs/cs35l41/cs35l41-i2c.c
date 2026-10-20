@@ -19,6 +19,7 @@
 #include <linux/init.h>
 #include <linux/delay.h>
 #include <linux/i2c.h>
+#include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <linux/workqueue.h>
 #include <linux/platform_device.h>
@@ -113,6 +114,12 @@ static int cs35l41_i2c_remove(struct i2c_client *client)
 					 i + 1, bank + 1, ret);
 		}
 	}
+
+	/*
+	 * Masking the device does not wait for an IRQ thread already in flight.
+	 * Stop the handler before tearing down the DSP and ASoC component.
+	 */
+	disable_irq(cs35l41->irq);
 
 	snd_soc_unregister_component(cs35l41->dev);
 	wm_adsp2_remove(&cs35l41->dsp);
