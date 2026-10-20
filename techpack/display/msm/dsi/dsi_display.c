@@ -5752,6 +5752,11 @@ static ssize_t sysfs_fod_hbm_write(struct device *dev,
 	 * DSI_ALL_CLKS on + cmd + clocks off + unlock.
 	 */
 	mutex_lock(&display->panel->panel_lock);
+	if (display->panel->hbm_requested) {
+		rc = -EBUSY;
+		goto out_unlock;
+	}
+
 	rc = dsi_display_clk_ctrl(display->dsi_clk_handle,
 				  DSI_ALL_CLKS, DSI_CLK_ON);
 	if (rc) {
@@ -5801,6 +5806,8 @@ static ssize_t sysfs_hbm_write(struct device *dev,
 	mutex_lock(&display->panel->panel_lock);
 	if (!display->panel->panel_initialized) {
 		rc = dsi_panel_set_hbm(display->panel, enable);
+		if (!rc)
+			dsi_display_set_fod_ui(display, false);
 		goto out_unlock;
 	}
 
@@ -5811,7 +5818,19 @@ static ssize_t sysfs_hbm_write(struct device *dev,
 		goto out_unlock;
 	}
 
+	/* FOD HBM and manual HBM are mutually exclusive panel modes. */
+	if (enable && atomic_read(&display->fod_ui)) {
+		rc = dsi_panel_set_fod_hbm(display->panel, false);
+		if (rc) {
+			pr_err("hbm: failed to clear FOD HBM before manual HBM: %d\n",
+				rc);
+			goto clock_off;
+		}
+		dsi_display_set_fod_ui(display, false);
+	}
+
 	rc = dsi_panel_set_hbm(display->panel, enable);
+clock_off:
 	clk_rc = dsi_display_clk_ctrl(display->dsi_clk_handle,
 				      DSI_ALL_CLKS, DSI_CLK_OFF);
 	if (!rc)
