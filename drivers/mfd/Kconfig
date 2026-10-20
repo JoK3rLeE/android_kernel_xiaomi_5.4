@@ -2036,9 +2036,10 @@ config MFD_WCD
 	  individual drivers separately to enable the codec functionality.
 
 config MFD_SPK_ID
-	bool "Versatile Express System Registers"
+	bool "Xiaomi speaker identification GPIO driver"
 	help
-	  Xiaomi speaker ID driver.
+	  Support the Xiaomi speaker identification GPIO/pinctrl driver used by
+	  the CS35L41 amplifier on Cepheus.
 
 endmenu
 endif
