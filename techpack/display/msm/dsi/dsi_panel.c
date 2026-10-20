@@ -759,6 +759,35 @@ int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
 	return rc;
 }
 
+/*
+ * Caller must hold panel_lock. Remember the requested manual HBM state so
+ * it can be restored after the panel is powered down and enabled again.
+ */
+int dsi_panel_set_hbm(struct dsi_panel *panel, bool enable)
+{
+	int rc;
+	enum dsi_cmd_set_type type = enable ?
+		DSI_CMD_SET_DISP_HBM_ON : DSI_CMD_SET_DISP_HBM_OFF;
+
+	if (!panel)
+		return -EINVAL;
+
+	if (!panel->panel_initialized) {
+		panel->hbm_requested = enable;
+		return 0;
+	}
+
+	rc = dsi_panel_tx_cmd_set(panel, type);
+	if (rc) {
+		pr_err("[%s] failed to send manual HBM %s command, rc=%d\n",
+			panel->name, enable ? "on" : "off", rc);
+		return rc;
+	}
+
+	panel->hbm_requested = enable;
+	return 0;
+}
+
 int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 {
 	int rc = 0;
@@ -1913,6 +1942,8 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-qsync-off-commands",
 	"qcom,mdss-dsi-dispparam-hbm-fod-on-command",
 	"qcom,mdss-dsi-dispparam-hbm-fod-off-command",
+	"qcom,mdss-dsi-dispparam-hbm-on-command",
+	"qcom,mdss-dsi-dispparam-hbm-off-command",
 #if defined(CONFIG_MACH_XIAOMI_SM8150)
 	"mi,mdss-dsi-esd-check-read-command",
 #endif
@@ -1947,6 +1978,8 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-qsync-off-commands-state",
 	"qcom,mdss-dsi-dispparam-hbm-fod-on-command-state",
 	"qcom,mdss-dsi-dispparam-hbm-fod-off-command-state",
+	"qcom,mdss-dsi-dispparam-hbm-on-command-state",
+	"qcom,mdss-dsi-dispparam-hbm-off-command-state",
 #if defined(CONFIG_MACH_XIAOMI_SM8150)
 	"mi,mdss-dsi-esd-check-read-command-state",
 #endif
@@ -5063,11 +5096,19 @@ int dsi_panel_enable(struct dsi_panel *panel)
 	mutex_lock(&panel->panel_lock);
 
 	rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_ON);
-	if (rc)
+	if (rc) {
 		DSI_ERR("[%s] failed to send DSI_CMD_SET_ON cmds, rc=%d\n",
 		       panel->name, rc);
-	else
+	} else {
 		panel->panel_initialized = true;
+		if (panel->hbm_requested) {
+			int hbm_rc = dsi_panel_set_hbm(panel, true);
+
+			if (hbm_rc)
+				DSI_ERR("[%s] failed to restore manual HBM, rc=%d\n",
+					panel->name, hbm_rc);
+		}
+	}
 	mutex_unlock(&panel->panel_lock);
 	return rc;
 }
