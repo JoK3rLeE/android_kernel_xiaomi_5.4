@@ -18,6 +18,9 @@
 #include "msm_mmu.h"
 #include "dsi_display.h"
 #include "dsi_panel.h"
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+#include "exposure_adjustment.h"
+#endif
 #include "dsi_ctrl.h"
 #include "dsi_ctrl_hw.h"
 #include "dsi_drm.h"
@@ -5856,10 +5859,73 @@ out_unlock:
 
 static DEVICE_ATTR(hbm, 0220, NULL, sysfs_hbm_write);
 
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+static ssize_t sysfs_ea_enable_read(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", ea_panel_is_enabled());
+}
+
+static ssize_t sysfs_ea_enable_write(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct dsi_display *display = dev_get_drvdata(dev);
+	bool enable;
+	int rc, clk_rc;
+
+	if (!display || !display->panel)
+		return -EINVAL;
+
+	rc = kstrtobool(buf, &enable);
+	if (rc)
+		return rc;
+
+	mutex_lock(&display->panel->panel_lock);
+	/* Avoid changing PCC while either HBM mode temporarily owns the panel. */
+	if (display->panel->hbm_requested ||
+			display->panel->resend_ea ||
+			display->panel->resend_ea_hbm ||
+			atomic_read(&display->fod_ui)) {
+		rc = -EBUSY;
+		goto out_unlock;
+	}
+
+	if (!display->panel->panel_initialized) {
+		ea_panel_mode_ctrl(display->panel, enable);
+		rc = 0;
+		goto out_unlock;
+	}
+
+	rc = dsi_display_clk_ctrl(display->dsi_clk_handle,
+				  DSI_ALL_CLKS, DSI_CLK_ON);
+	if (rc)
+		goto out_unlock;
+
+	ea_panel_mode_ctrl(display->panel, enable);
+	clk_rc = dsi_display_clk_ctrl(display->dsi_clk_handle,
+				      DSI_ALL_CLKS, DSI_CLK_OFF);
+	if (!rc)
+		rc = clk_rc;
+
+out_unlock:
+	mutex_unlock(&display->panel->panel_lock);
+	if (rc)
+		return rc;
+
+	return count;
+}
+
+static DEVICE_ATTR(msm_fb_ea_enable, 0644,
+		   sysfs_ea_enable_read, sysfs_ea_enable_write);
+#endif
+
 static struct attribute *display_fs_attrs[] = {
 	&dev_attr_fod_ui.attr,
 	&dev_attr_fod_hbm.attr,
 	&dev_attr_hbm.attr,
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+	&dev_attr_msm_fb_ea_enable.attr,
+#endif
 	NULL,
 };
 
