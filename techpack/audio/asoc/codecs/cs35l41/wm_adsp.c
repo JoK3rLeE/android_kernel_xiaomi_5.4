@@ -3531,15 +3531,14 @@ static int wm_halo_configure_mpu(struct wm_adsp *dsp)
 	ym_acc_cfg = (ym_sz / ym_bank_sz == 32) ? U32_MAX :
 		     (BIT(ym_sz / ym_bank_sz) - 1);
 
-	/* unlock MPU */
+	/* A failed bus write may still have reached the device; always relock. */
+	mpu_unlocked = true;
 	ret = regmap_write(regmap, dsp_base + HALO_MPU_LOCK_CONFIG,
 			   HALO_MPU_UNLOCK_CODE_0);
 	if (ret) {
 		adsp_err(dsp, "Error while unlocking MPU: %d\n", ret);
 		goto err;
 	}
-	/* Even a partial unlock sequence must be closed on every failure path. */
-	mpu_unlocked = true;
 
 	ret = regmap_write(regmap, dsp_base + HALO_MPU_LOCK_CONFIG,
 			   HALO_MPU_UNLOCK_CODE_1);
