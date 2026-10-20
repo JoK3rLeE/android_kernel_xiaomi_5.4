@@ -2078,11 +2078,22 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 			goto err;
 		}
 		usleep_range(1000, 1100);
-		regmap_read(cs35l41->regmap, CS35L41_IRQ1_STATUS4, &int_status);
+		ret = regmap_read(cs35l41->regmap, CS35L41_IRQ1_STATUS4,
+				  &int_status);
+		if (ret < 0) {
+			dev_err(cs35l41->dev,
+				"Failed to read OTP boot status: %d\n", ret);
+			goto err;
+		}
 		timeout--;
 	} while (!(int_status & CS35L41_OTP_BOOT_DONE));
 
-	regmap_read(cs35l41->regmap, CS35L41_IRQ1_STATUS3, &int_status);
+	ret = regmap_read(cs35l41->regmap, CS35L41_IRQ1_STATUS3, &int_status);
+	if (ret < 0) {
+		dev_err(cs35l41->dev,
+			"Failed to read OTP error status: %d\n", ret);
+		goto err;
+	}
 	if (int_status & CS35L41_OTP_BOOT_ERR) {
 		dev_err(cs35l41->dev, "OTP Boot error\n");
 		ret = -EINVAL;
@@ -2136,9 +2147,14 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 		goto err;
 	}
 
-	/* Set interrupt masks for critical errors */
-	regmap_write(cs35l41->regmap, CS35L41_IRQ1_MASK1,
-		     CS35L41_INT1_MASK_DEFAULT);
+	/* Set interrupt masks for critical errors. */
+	ret = regmap_write(cs35l41->regmap, CS35L41_IRQ1_MASK1,
+			   CS35L41_INT1_MASK_DEFAULT);
+	if (ret < 0) {
+		dev_err(cs35l41->dev,
+			"Failed to configure interrupt mask: %d\n", ret);
+		goto err;
+	}
 
 	switch (reg_revid) {
 	case CS35L41_REVID_A0:
