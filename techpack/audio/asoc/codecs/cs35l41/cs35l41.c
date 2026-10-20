@@ -1156,6 +1156,7 @@ static int cs35l41_pcm_hw_params(struct snd_pcm_substream *substream,
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(dai->component);
 	int i;
 	unsigned int rate = params_rate(params);
+	unsigned int rate_cfg;
 	u8 asp_width, asp_wl;
 
 	pr_debug("++++>CSPL: %s.\n", __func__);
@@ -1167,12 +1168,12 @@ static int cs35l41_pcm_hw_params(struct snd_pcm_substream *substream,
 		dev_err(cs35l41->dev, "Unsupported sample rate: %u\n", rate);
 		return -EINVAL;
 	}
+	rate_cfg = cs35l41_fs_rates[i].fs_cfg;
 	{
 		int ret = regmap_update_bits(cs35l41->regmap,
 					     CS35L41_GLOBAL_CLK_CTRL,
 					     CS35L41_GLOBAL_FS_MASK,
-					     cs35l41_fs_rates[i].fs_cfg
-						     << CS35L41_GLOBAL_FS_SHIFT);
+					     rate_cfg << CS35L41_GLOBAL_FS_SHIFT);
 		if (ret)
 			return ret;
 	}
@@ -1186,14 +1187,12 @@ static int cs35l41_pcm_hw_params(struct snd_pcm_substream *substream,
 		if (cs35l41->dsp.n_rx_rates && !cs35l41->dsp.rx_rate_cache)
 			return -EINVAL;
 		for (i = 0; i < cs35l41->dsp.n_rx_rates; i++)
-			cs35l41->dsp.rx_rate_cache[i] =
-				cs35l41_fs_rates[i < ARRAY_SIZE(cs35l41_fs_rates) ? i : 0].fs_cfg;
+			cs35l41->dsp.rx_rate_cache[i] = rate_cfg;
 	} else {
 		if (cs35l41->dsp.n_tx_rates && !cs35l41->dsp.tx_rate_cache)
 			return -EINVAL;
 		for (i = 0; i < cs35l41->dsp.n_tx_rates; i++)
-			cs35l41->dsp.tx_rate_cache[i] =
-				cs35l41_fs_rates[i < ARRAY_SIZE(cs35l41_fs_rates) ? i : 0].fs_cfg;
+			cs35l41->dsp.tx_rate_cache[i] = rate_cfg;
 	}
 
 	asp_wl = params_width(params);
