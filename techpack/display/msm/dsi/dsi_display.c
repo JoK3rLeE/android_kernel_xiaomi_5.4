@@ -5832,7 +5832,8 @@ static ssize_t sysfs_hbm_write(struct device *dev,
 	}
 
 	/* FOD HBM and manual HBM are mutually exclusive panel modes. */
-	if (enable && atomic_read(&display->fod_ui)) {
+	if (enable && (atomic_read(&display->fod_ui) ||
+			display->panel->resend_ea)) {
 		rc = dsi_panel_set_fod_hbm(display->panel, false);
 		if (rc) {
 			pr_err("hbm: failed to clear FOD HBM before manual HBM: %d\n",
