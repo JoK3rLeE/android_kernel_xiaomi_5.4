@@ -3322,6 +3322,31 @@ err:
 	return ret;
 }
 
+static int wm_halo_set_rate_block(struct wm_adsp *dsp,
+				     unsigned int rate_base,
+				     unsigned int n_rates,
+				     const u8 *rate_cache)
+{
+	unsigned int addr = dsp->base + rate_base;
+	int ret, i;
+
+	if (n_rates && !rate_cache)
+		return -EINVAL;
+
+	for (i = 0; i < n_rates; i++) {
+		ret = regmap_update_bits(dsp->regmap, addr + (i * 8),
+					 HALO_DSP_RATE_MASK,
+					 rate_cache[i] << HALO_DSP_RATE_SHIFT);
+		if (ret) {
+			adsp_err(dsp, "Failed to set HALO sample rate %d: %d\n",
+				 i, ret);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
 static void wm_halo_set_calibration_control(struct wm_adsp *dsp,
 					    const char *name, u32 value)
 {
@@ -3394,6 +3419,18 @@ int wm_halo_event(struct snd_soc_dapm_widget *w,
 		}
 		wm_halo_apply_calibration(dsp);
 		mutex_unlock(&dsp->pwr_lock);
+
+		ret = wm_halo_set_rate_block(dsp, HALO_SAMPLE_RATE_RX1,
+					     dsp->n_rx_rates,
+					     dsp->rx_rate_cache);
+		if (ret)
+			return ret;
+
+		ret = wm_halo_set_rate_block(dsp, HALO_SAMPLE_RATE_TX1,
+					     dsp->n_tx_rates,
+					     dsp->tx_rate_cache);
+		if (ret)
+			return ret;
 
 		ret = wm_halo_clear_stream_arb(dsp);
 		if (ret)
