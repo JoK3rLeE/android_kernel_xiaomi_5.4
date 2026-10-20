@@ -121,6 +121,13 @@ static int cs35l41_i2c_remove(struct i2c_client *client)
 	 */
 	disable_irq(cs35l41->irq);
 
+	/*
+	 * Stop firmware boot work before ASoC unregisters the component it
+	 * may reference. wm_adsp2_remove() repeats this cancellation before
+	 * freeing DSP state, which is harmless once the work is idle.
+	 */
+	cancel_work_sync(&cs35l41->dsp.boot_work);
+
 	snd_soc_unregister_component(cs35l41->dev);
 	wm_adsp2_remove(&cs35l41->dsp);
 
