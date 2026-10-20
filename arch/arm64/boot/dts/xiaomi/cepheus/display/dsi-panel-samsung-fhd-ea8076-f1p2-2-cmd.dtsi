@@ -23,6 +23,11 @@
 		qcom,mdss-dsi-panel-model = "SAMSUNG FHD EA8076 CMD PANEL";
 		qcom,mdss-dsi-panel-sleepwrmod = <0>;
 		qcom,mdss-dsi-panel-type = "dsi_cmd_mode";
+
+		/* Required by the 5.4 DSI display parser. */
+		qcom,dsi-ctrl-num = <0>;
+		qcom,dsi-phy-num = <0>;
+		qcom,dsi-select-clocks = "mux_byte_clk0", "mux_pixel_clk0";
 		qcom,mdss-dsi-virtual-channel-id = <0>;
 		qcom,mdss-dsi-stream = <0>;
 		qcom,mdss-dsi-bpp = <24>;
@@ -115,6 +120,8 @@
 				qcom,mdss-dsi-panel-framerate = <60>;
 				qcom,mdss-dsi-panel-clockrate = <1100000000>;
 				qcom,mdss-dsi-panel-jitter = <0x5 0x1>;
+				qcom,display-topology = <1 0 1>;
+				qcom,default-topology-index = <0>;
 				qcom,mdss-dsi-on-command = [
 					39 00 00 00 00 00 03 F0 5A 5A
 					39 00 00 00 00 00 03 FC 5A 5A
