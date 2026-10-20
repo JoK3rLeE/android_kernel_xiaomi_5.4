@@ -47,7 +47,7 @@ static int ea_panel_send_pcc(struct dsi_panel *panel, u32 bl_lvl)
 		return -ENODEV;
 
 	crtc = display->drm_conn->state->crtc;
-	if (!crtc->dev || !crtc->dev->dev_private)
+	if (!crtc->state || !crtc->dev || !crtc->dev->dev_private)
 		return -ENODEV;
 
 	priv = crtc->dev->dev_private;
