@@ -304,6 +304,7 @@ struct dsi_panel {
 
 	struct brightness_alpha_pair *fod_dim_lut;
 	u32 fod_dim_lut_count;
+	bool hbm_requested;
 
 #if defined(CONFIG_MACH_XIAOMI_SM8150)
 	bool cphy_esd_check;
@@ -453,6 +454,9 @@ void dsi_panel_destroy_cmd_packets(struct dsi_panel_cmd_set *set);
 void dsi_panel_dealloc_cmd_packets(struct dsi_panel_cmd_set *set);
 
 int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status);
+
+/* Caller must hold panel_lock. */
+int dsi_panel_set_hbm(struct dsi_panel *panel, bool enable);
 
 u32 dsi_panel_get_fod_dim_alpha(struct dsi_panel *panel);
 
