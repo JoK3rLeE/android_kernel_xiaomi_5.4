@@ -5831,6 +5831,12 @@ static ssize_t sysfs_hbm_write(struct device *dev,
 		goto out_unlock;
 	}
 
+	/* Don't send a manual HBM-off command when manual HBM wasn't active. */
+	if (!enable && !display->panel->hbm_requested) {
+		rc = 0;
+		goto clock_off;
+	}
+
 	/* FOD HBM and manual HBM are mutually exclusive panel modes. */
 	if (enable && (atomic_read(&display->fod_ui) ||
 			display->panel->resend_ea)) {
