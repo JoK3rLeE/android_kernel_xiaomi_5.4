@@ -947,7 +947,7 @@ static int wm_adsp_cal_z_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	ucontrol->value.enumerated.item[0] = dsp->cal_z;
+	ucontrol->value.integer.value[0] = dsp->cal_z;
 
 	return 0;
 }
@@ -958,8 +958,10 @@ static int wm_adsp_cal_z_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	dsp->cal_z = ucontrol->value.enumerated.item[0];
-	dsp->cal_chksum = dsp->cal_z + CAL_STATUS_DEFAULT;
+	mutex_lock(&dsp->pwr_lock);
+	dsp->cal_z = ucontrol->value.integer.value[0];
+	dsp->cal_chksum = dsp->cal_z + dsp->cal_status;
+	mutex_unlock(&dsp->pwr_lock);
 
 	dev_info(codec->dev, "cal_z = %d\n", dsp->cal_z);
 
@@ -972,7 +974,7 @@ static int wm_adsp_ambient_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	ucontrol->value.enumerated.item[0] = dsp->ambient;
+	ucontrol->value.integer.value[0] = dsp->ambient;
 
 	return 0;
 }
@@ -983,7 +985,9 @@ static int wm_adsp_ambient_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	dsp->ambient = ucontrol->value.enumerated.item[0];
+	mutex_lock(&dsp->pwr_lock);
+	dsp->ambient = ucontrol->value.integer.value[0];
+	mutex_unlock(&dsp->pwr_lock);
 
 	dev_info(codec->dev, "ambient = %d\n", dsp->ambient);
 
@@ -996,7 +1000,7 @@ static int wm_adsp_cal_status_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	ucontrol->value.enumerated.item[0] = dsp->cal_status;
+	ucontrol->value.integer.value[0] = dsp->cal_status;
 
 	return 0;
 }
@@ -1007,7 +1011,10 @@ static int wm_adsp_cal_status_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	dsp->cal_status = ucontrol->value.enumerated.item[0];
+	mutex_lock(&dsp->pwr_lock);
+	dsp->cal_status = ucontrol->value.integer.value[0];
+	dsp->cal_chksum = dsp->cal_z + dsp->cal_status;
+	mutex_unlock(&dsp->pwr_lock);
 
 	dev_info(codec->dev, "cal_status = %d\n", dsp->cal_status);
 
@@ -1020,7 +1027,7 @@ static int wm_adsp_cal_chksum_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	ucontrol->value.enumerated.item[0] = dsp->cal_chksum;
+	ucontrol->value.integer.value[0] = dsp->cal_chksum;
 
 	return 0;
 }
@@ -1031,7 +1038,9 @@ static int wm_adsp_cal_chksum_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	dsp->cal_chksum = ucontrol->value.enumerated.item[0];
+	mutex_lock(&dsp->pwr_lock);
+	dsp->cal_chksum = ucontrol->value.integer.value[0];
+	mutex_unlock(&dsp->pwr_lock);
 
 	dev_info(codec->dev, "cal_chksum = %d\n", dsp->cal_chksum);
 
@@ -3350,6 +3359,41 @@ static int wm_halo_set_rate_block(struct wm_adsp *dsp, unsigned int rate_base,
 	return 0;
 }
 
+int wm_halo_set_sample_rate(struct wm_adsp *dsp, bool playback, u8 rate)
+{
+	int ret = 0, i;
+
+	mutex_lock(&dsp->pwr_lock);
+
+	if (playback) {
+		if (dsp->n_rx_rates && !dsp->rx_rate_cache) {
+			ret = -EINVAL;
+			goto out;
+		}
+		for (i = 0; i < dsp->n_rx_rates; i++)
+			dsp->rx_rate_cache[i] = rate;
+		if (dsp->running)
+			ret = wm_halo_set_rate_block(dsp, HALO_SAMPLE_RATE_RX1,
+						     dsp->n_rx_rates,
+						     dsp->rx_rate_cache);
+	} else {
+		if (dsp->n_tx_rates && !dsp->tx_rate_cache) {
+			ret = -EINVAL;
+			goto out;
+		}
+		for (i = 0; i < dsp->n_tx_rates; i++)
+			dsp->tx_rate_cache[i] = rate;
+		if (dsp->running)
+			ret = wm_halo_set_rate_block(dsp, HALO_SAMPLE_RATE_TX1,
+						     dsp->n_tx_rates,
+						     dsp->tx_rate_cache);
+	}
+
+out:
+	mutex_unlock(&dsp->pwr_lock);
+	return ret;
+}
+
 static int wm_halo_clear_stream_arb(struct wm_adsp *dsp)
 {
 	struct regmap *regmap = dsp->regmap;
@@ -3829,7 +3873,7 @@ int wm_halo_event(struct snd_soc_dapm_widget *w, struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_dapm_to_component(w->dapm);
 	struct wm_adsp *dsps = snd_soc_component_get_drvdata(codec);
 	struct wm_adsp *dsp = &dsps[w->shift];
-	int ret;
+	int ret = 0, cleanup_ret;
 
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
@@ -3841,13 +3885,13 @@ int wm_halo_event(struct snd_soc_dapm_widget *w, struct snd_kcontrol *kcontrol,
 			ret = -EIO;
 			goto err;
 		}
-		wm_halo_apply_calibration(w);
+		ret = wm_halo_apply_calibration(w);
+		if (ret)
+			goto err;
 		/* Sync set controls */
 		ret = wm_coeff_sync_controls(dsp);
 		if (ret != 0)
 			goto err;
-
-		//wm_halo_apply_calibration(w);
 
 		adsp_dbg(dsp, "Setting RX rates.\n");
 		ret = wm_halo_set_rate_block(dsp, HALO_SAMPLE_RATE_RX1,
@@ -3912,11 +3956,15 @@ int wm_halo_event(struct snd_soc_dapm_widget *w, struct snd_kcontrol *kcontrol,
 
 		dsp->running = false;
 
-		regmap_update_bits(dsp->regmap,
-				   dsp->base + HALO_CCM_CORE_CONTROL,
-				   HALO_CORE_EN, 0);
+		ret = regmap_update_bits(dsp->regmap,
+					 dsp->base + HALO_CCM_CORE_CONTROL,
+					 HALO_CORE_EN, 0);
+		if (ret)
+			adsp_err(dsp, "Failed to disable HALO core: %d\n", ret);
 
-		wm_halo_clear_stream_arb(dsp);
+		cleanup_ret = wm_halo_clear_stream_arb(dsp);
+		if (!ret)
+			ret = cleanup_ret;
 
 		if (wm_adsp_fw[dsp->fw].num_caps != 0)
 			wm_adsp_buffer_free(dsp);
@@ -3929,9 +3977,10 @@ int wm_halo_event(struct snd_soc_dapm_widget *w, struct snd_kcontrol *kcontrol,
 		break;
 	}
 
-	return 0;
+	return ret;
 err:
 	mutex_unlock(&dsp->pwr_lock);
+	dsp->running = false;
 	regmap_update_bits(dsp->regmap, dsp->base + HALO_CCM_CORE_CONTROL,
 			   HALO_CORE_EN, 0);
 	return ret;
@@ -3976,45 +4025,44 @@ static int wm_coeff_k_get(struct snd_kcontrol *kctl,
 }
 static int wm_adsp_k_ctl_put(struct wm_adsp *dsp, const char *name, int value)
 {
-	struct snd_kcontrol *kctl = NULL;
-	struct snd_ctl_elem_value ucontrol;
+	struct snd_kcontrol *kctl;
+	struct snd_ctl_elem_value ucontrol = { 0 };
 	struct snd_soc_card *card = dsp->component->card;
+	__be32 be_value = cpu_to_be32(value);
 
 	kctl = snd_soc_card_get_kcontrol(card, name);
-	if (kctl == NULL) {
+	if (!kctl) {
 		adsp_warn(dsp, "%s: %s isn't found\n", __func__, name);
-		return -1;
+		return -ENOENT;
 	}
 
 	adsp_dbg(dsp, "%s: %s:0x%x\n", __func__, kctl->id.name, value);
-	value = cpu_to_be32(value);
-	memcpy((char *)ucontrol.value.bytes.data, (char *)&value,
-	       sizeof(value));
-	wm_coeff_k_put(kctl, &ucontrol);
+	memcpy(ucontrol.value.bytes.data, &be_value, sizeof(be_value));
 
-	return 0;
+	return wm_coeff_k_put(kctl, &ucontrol);
 }
 
 static int wm_adsp_k_ctl_get(struct wm_adsp *dsp, const char *name)
 {
-	struct snd_kcontrol *kctl = NULL;
-	struct snd_ctl_elem_value ucontrol;
+	struct snd_kcontrol *kctl;
+	struct snd_ctl_elem_value ucontrol = { 0 };
 	struct snd_soc_card *card = dsp->component->card;
-
-	int value = 0;
+	__be32 be_value;
+	int ret;
 
 	kctl = snd_soc_card_get_kcontrol(card, name);
-	if (kctl == NULL) {
+	if (!kctl) {
 		adsp_warn(dsp, "%s: %s isn't found\n", __func__, name);
-		return -1;
+		return -ENOENT;
 	}
 
-	wm_coeff_k_get(kctl, &ucontrol);
-	memcpy((char *)&value, (char *)ucontrol.value.bytes.data,
-	       sizeof(value));
-	value = be32_to_cpu(value);
+	ret = wm_coeff_k_get(kctl, &ucontrol);
+	if (ret)
+		return ret;
 
-	adsp_dbg(dsp, "%s: %s:0x%x\n", __func__, kctl->id.name, value);
+	memcpy(&be_value, ucontrol.value.bytes.data, sizeof(be_value));
+	adsp_dbg(dsp, "%s: %s:0x%x\n", __func__, kctl->id.name,
+		 be32_to_cpu(be_value));
 
 	return 0;
 }
@@ -4024,35 +4072,73 @@ static int wm_halo_apply_calibration(struct snd_soc_dapm_widget *w)
 	struct snd_soc_component *codec = snd_soc_dapm_to_component(w->dapm);
 	struct wm_adsp *dsps = snd_soc_component_get_drvdata(codec);
 	struct wm_adsp *dsp = &dsps[w->shift];
+	int ret;
 
 	switch (dsp->fw) {
 	case WM_ADSP_FW_CALIB:
-		adsp_warn(dsp, "Set ambient %d, only for Z Diagnostic\n",
-			  dsp->ambient);
-		wm_adsp_k_ctl_put(dsp, "DSP1X Diag Z cd CAL_AMBIENT",
-				  dsp->ambient);
+		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Diag Z cd CAL_AMBIENT",
+					dsp->ambient);
+		if (ret)
+			return ret;
 		break;
 	case WM_ADSP_FW_DIAG:
-		adsp_warn(dsp, "Set ambient %d, only for Diagnostic\n",
-			  dsp->ambient);
-		wm_adsp_k_ctl_put(dsp, "DSP1X Diag cd CAL_AMBIENT",
-				  dsp->ambient);
+		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Diag cd CAL_AMBIENT",
+					dsp->ambient);
+		if (ret)
+			return ret;
 		break;
 	case WM_ADSP_FW_SPK_PROT:
-		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd CAL_R", dsp->cal_z);
-		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd CAL_STATUS",
-				  dsp->cal_status);
-		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd CAL_CHECKSUM",
-				  dsp->cal_chksum);
-		wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_R");
-		wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_STATUS");
-		wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_CHECKSUM");
+		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd CAL_R",
+					dsp->cal_z);
+		if (ret)
+			return ret;
+		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd CAL_STATUS",
+					dsp->cal_status);
+		if (ret)
+			return ret;
+		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd CAL_CHECKSUM",
+					dsp->cal_chksum);
+		if (ret)
+			return ret;
+		ret = wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_R");
+		if (ret)
+			return ret;
+		ret = wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_STATUS");
+		if (ret)
+			return ret;
+		ret = wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_CHECKSUM");
+		if (ret)
+			return ret;
+
+		/* Bypass controls are optional across firmware revisions. */
+		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_IN_ENH",
+					(dsp->block_bypass ||
+					 dsp->block_bypass_in_enh) ?
+					0x00400001 : 0x00000000);
+		if (ret)
+			adsp_dbg(dsp, "No BYPASS_IN_ENH control: %d\n", ret);
+		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_EQ",
+					dsp->block_bypass ?
+					0x00400001 : 0x00000000);
+		if (ret)
+			adsp_dbg(dsp, "No BYPASS_EQ control: %d\n", ret);
+		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_ACTI",
+					dsp->block_bypass ?
+					0x00400001 : 0x00000000);
+		if (ret)
+			adsp_dbg(dsp, "No BYPASS_ACTI control: %d\n", ret);
+		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_MBL",
+					dsp->block_bypass ?
+					0x00400001 : 0x00000000);
+		if (ret)
+			adsp_dbg(dsp, "No BYPASS_MBL control: %d\n", ret);
 		break;
 	default:
 		break;
 	}
 
-	adsp_warn(dsp, "Do thing'\n");
+	adsp_dbg(dsp, "Calibration controls applied for firmware %d\n",
+		 dsp->fw);
 	return 0;
 }
 
@@ -4132,6 +4218,10 @@ int wm_halo_init(struct wm_adsp *dsp)
 		return -ENOMEM;
 	}
 
+	/* 0x03 is the CS35L41's 48 kHz rate encoding. */
+	memset(dsp->rx_rate_cache, 0x03, dsp->n_rx_rates);
+	memset(dsp->tx_rate_cache, 0x03, dsp->n_tx_rates);
+
 	dsp->ambient = AMBIENT_DEFAULT;
 	dsp->cal_z = CAL_R_DEFAULT;
 	dsp->cal_status = CAL_STATUS_DEFAULT;
@@ -4151,7 +4241,9 @@ void wm_adsp2_remove(struct wm_adsp *dsp)
 	}
 
 	kfree(dsp->rx_rate_cache);
+	dsp->rx_rate_cache = NULL;
 	kfree(dsp->tx_rate_cache);
+	dsp->tx_rate_cache = NULL;
 }
 
 static inline int wm_adsp_compr_attached(struct wm_adsp_compr *compr)
