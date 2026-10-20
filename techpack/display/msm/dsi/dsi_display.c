@@ -5971,14 +5971,14 @@ static int dsi_display_bind(struct device *dev,
 
 	atomic_set(&display->clkrate_change_pending, 0);
 	display->cached_clk_rate = 0;
+	/* Initialize sysfs-visible state before publishing the attributes. */
+	atomic_set(&display->fod_ui, false);
 
 	rc = dsi_display_sysfs_init(display);
 	if (rc) {
 		pr_err("[%s] sysfs init failed, rc=%d\n", display->name, rc);
 		goto error;
 	}
-
-	atomic_set(&display->fod_ui, false);
 
 	memset(&info, 0x0, sizeof(info));
 
