@@ -4133,6 +4133,10 @@ int wm_halo_init(struct wm_adsp *dsp)
 		return -ENOMEM;
 	}
 
+	/* 0x03 is the CS35L41's 48 kHz rate encoding. */
+	memset(dsp->rx_rate_cache, 0x03, dsp->n_rx_rates);
+	memset(dsp->tx_rate_cache, 0x03, dsp->n_tx_rates);
+
 	dsp->ambient = AMBIENT_DEFAULT;
 	dsp->cal_z = CAL_R_DEFAULT;
 	dsp->cal_status = CAL_STATUS_DEFAULT;
@@ -4152,7 +4156,9 @@ void wm_adsp2_remove(struct wm_adsp *dsp)
 	}
 
 	kfree(dsp->rx_rate_cache);
+	dsp->rx_rate_cache = NULL;
 	kfree(dsp->tx_rate_cache);
+	dsp->tx_rate_cache = NULL;
 }
 
 static inline int wm_adsp_compr_attached(struct wm_adsp_compr *compr)
