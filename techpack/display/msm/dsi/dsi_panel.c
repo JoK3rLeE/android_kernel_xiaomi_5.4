@@ -772,6 +772,10 @@ int dsi_panel_set_hbm(struct dsi_panel *panel, bool enable)
 	if (!panel)
 		return -EINVAL;
 
+	if (panel->cur_mode && panel->cur_mode->priv_info &&
+			!panel->cur_mode->priv_info->cmd_sets[type].count)
+		return -EOPNOTSUPP;
+
 	if (!panel->panel_initialized) {
 		panel->hbm_requested = enable;
 		return 0;
