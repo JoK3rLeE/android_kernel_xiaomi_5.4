@@ -521,11 +521,15 @@ static int cs35l41_otp_unpack(void *data)
 			cs35l41->regmap,
 			CS35L41_OTP_MEM0 + i * 4 * MAX_BULK_READ_SIZE,
 			&otp_mem[i * MAX_BULK_READ_SIZE], MAX_BULK_READ_SIZE);
-	}
-
-	if (ret < 0) {
-		dev_err(cs35l41->dev, "Read OTP Mem failed\n");
-		return -EINVAL;
+		if (ret < 0) {
+			dev_err(cs35l41->dev,
+				"Read OTP Mem failed at block %d: %d\n", i, ret);
+			if (cs35l41->bus_spi) {
+				spi->max_speed_hz = orig_spi_freq;
+				spi_setup(spi);
+			}
+			return ret;
+		}
 	}
 
 	if (cs35l41->bus_spi) {
