@@ -4101,13 +4101,13 @@ static int wm_halo_apply_calibration(struct snd_soc_dapm_widget *w)
 			return ret;
 		ret = wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_R");
 		if (ret)
-			return ret;
+			adsp_dbg(dsp, "CAL_R readback unavailable: %d\n", ret);
 		ret = wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_STATUS");
 		if (ret)
-			return ret;
+			adsp_dbg(dsp, "CAL_STATUS readback unavailable: %d\n", ret);
 		ret = wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_CHECKSUM");
 		if (ret)
-			return ret;
+			adsp_dbg(dsp, "CAL_CHECKSUM readback unavailable: %d\n", ret);
 
 		/* Bypass controls are optional across firmware revisions. */
 		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_IN_ENH",
