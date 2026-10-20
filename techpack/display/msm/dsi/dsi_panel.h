@@ -305,6 +305,10 @@ struct dsi_panel {
 	struct brightness_alpha_pair *fod_dim_lut;
 	u32 fod_dim_lut_count;
 	bool hbm_requested;
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+	bool resend_ea;
+	bool resend_ea_hbm;
+#endif
 
 #if defined(CONFIG_MACH_XIAOMI_SM8150)
 	bool cphy_esd_check;
