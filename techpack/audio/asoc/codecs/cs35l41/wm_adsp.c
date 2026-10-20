@@ -474,7 +474,6 @@ static void wm_adsp_buf_free(struct list_head *list)
 #define WM_ADSP_FW_CTRL 6
 #define WM_ADSP_FW_ASR 7
 #define WM_ADSP_FW_TRACE 8
-#define WM_ADSP_FW_SPK_PROT 9
 #define WM_ADSP_FW_DIAG 10
 #define WM_ADSP_FW_CALIB 11
 
