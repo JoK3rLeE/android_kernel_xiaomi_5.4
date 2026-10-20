@@ -169,6 +169,10 @@ void wm_adsp2_remove(struct wm_adsp *dsp);
 int wm_adsp2_component_probe(struct wm_adsp *dsp, struct snd_soc_component *component);
 int wm_adsp2_component_remove(struct wm_adsp *dsp, struct snd_soc_component *component);
 int wm_halo_init(struct wm_adsp *dsp);
+int wm_halo_early_event(struct snd_soc_dapm_widget *w,
+			struct snd_kcontrol *kcontrol, int event);
+int wm_halo_event(struct snd_soc_dapm_widget *w,
+		  struct snd_kcontrol *kcontrol, int event);
 
 int wm_adsp1_event(struct snd_soc_dapm_widget *w,
 		   struct snd_kcontrol *kcontrol, int event);
