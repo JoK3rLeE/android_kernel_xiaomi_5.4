@@ -2017,23 +2017,30 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 	/* returning NULL can be an option if in stereo mode */
 	cs35l41->reset_gpio = of_get_named_gpio(cs35l41->dev->of_node,
 						"cs,cdc-reset-gpio", 0);
-
-	dev_err(cs35l41->dev, "Set GPIO %d as RESET pin\n",
-		cs35l41->reset_gpio);
-	if (!gpio_is_valid(cs35l41->reset_gpio)) {
-		dev_err(cs35l41->dev, "GPIO %d is invalid!\n",
-			cs35l41->reset_gpio);
+	if (cs35l41->reset_gpio == -EPROBE_DEFER) {
+		ret = -EPROBE_DEFER;
+		goto err;
 	}
 
-	if (cs35l41->reset_gpio) {
-		dev_err(cs35l41->dev, "Reset cs35l41\n");
-		/* satisfy minimum reset pulse width spec */
-		usleep_range(2000, 2100);
+	if (gpio_is_valid(cs35l41->reset_gpio)) {
+		ret = gpio_direction_output(cs35l41->reset_gpio, 0);
+		if (ret) {
+			dev_err(cs35l41->dev, "Failed to assert reset GPIO %d: %d\n",
+				cs35l41->reset_gpio, ret);
+			goto err;
+		}
+		usleep_range(5000, 5100);
 
-		gpio_direction_output(cs35l41->reset_gpio, 0);
-		msleep(5);
-		gpio_direction_output(cs35l41->reset_gpio, 1);
-		msleep(2);
+		ret = gpio_direction_output(cs35l41->reset_gpio, 1);
+		if (ret) {
+			dev_err(cs35l41->dev, "Failed to deassert reset GPIO %d: %d\n",
+				cs35l41->reset_gpio, ret);
+			goto err;
+		}
+		usleep_range(2000, 2100);
+	} else {
+		dev_warn(cs35l41->dev,
+			 "No valid reset GPIO; continuing without external reset\n");
 	}
 
 	usleep_range(2000, 2100);
