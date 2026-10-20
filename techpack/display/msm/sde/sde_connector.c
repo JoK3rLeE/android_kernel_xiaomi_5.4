@@ -876,6 +876,7 @@ void sde_connector_update_fod_hbm(struct drm_connector *connector)
 	struct sde_connector *c_conn;
 	struct dsi_display *display;
 	bool status;
+	int rc;
 
 	if (!connector) {
 		SDE_ERROR("invalid connector\n");
@@ -887,6 +888,8 @@ void sde_connector_update_fod_hbm(struct drm_connector *connector)
 		return;
 
 	display = (struct dsi_display *) c_conn->display;
+	if (!display || !display->panel)
+		return;
 
 	if (!c_conn->encoder || !c_conn->encoder->crtc ||
 			!c_conn->encoder->crtc->state)
@@ -894,12 +897,23 @@ void sde_connector_update_fod_hbm(struct drm_connector *connector)
 
 	cstate = to_sde_crtc_state(c_conn->encoder->crtc->state);
 	status = cstate->fod_dim_layer != NULL;
-	if (atomic_xchg(&effective_status, status) == status)
-		return;
 
 	mutex_lock(&display->panel->panel_lock);
-	dsi_panel_set_fod_hbm(display->panel, status);
+	if (atomic_read(&effective_status) == status) {
+		mutex_unlock(&display->panel->panel_lock);
+		return;
+	}
+
+	rc = dsi_panel_set_fod_hbm(display->panel, status);
+	if (!rc)
+		atomic_set(&effective_status, status);
 	mutex_unlock(&display->panel->panel_lock);
+
+	if (rc) {
+		SDE_ERROR("failed to set FOD HBM state %d: %d\n", status, rc);
+		return;
+	}
+
 	dsi_display_set_fod_ui(display, status);
 }
 
@@ -920,7 +934,7 @@ int sde_connector_pre_kickoff(struct drm_connector *connector)
 	struct sde_connector *c_conn;
 	struct sde_connector_state *c_state;
 	struct msm_display_kickoff_params params;
-	struct dsi_display *display;
+	struct dsi_display *display = NULL;
 	int rc;
 
 	if (!connector) {
@@ -938,8 +952,7 @@ int sde_connector_pre_kickoff(struct drm_connector *connector)
 	/*
 	 * During pre kickoff DCS commands have to have an
 	 * asynchronous wait to avoid an unnecessary stall
-	 * in pre-kickoff. This flag must be reset at the
-	 * end of display pre-kickoff.
+	 * in pre-kickoff. Always clear this flag on every exit.
 	 */
 	if (c_conn->connector_type == DRM_MODE_CONNECTOR_DSI) {
 		display = (struct dsi_display *)c_conn->display;
@@ -953,7 +966,7 @@ int sde_connector_pre_kickoff(struct drm_connector *connector)
 	}
 
 	if (!c_conn->ops.pre_kickoff)
-		return 0;
+		goto end;
 
 	params.rois = &c_state->rois;
 	params.hdr_meta = &c_state->hdr_meta;
@@ -963,10 +976,9 @@ int sde_connector_pre_kickoff(struct drm_connector *connector)
 	sde_connector_update_fod_hbm(connector);
 
 	rc = c_conn->ops.pre_kickoff(connector, c_conn->display, &params);
-
-	if (c_conn->connector_type == DRM_MODE_CONNECTOR_DSI)
-		display->queue_cmd_waits = false;
 end:
+	if (display)
+		display->queue_cmd_waits = false;
 	return rc;
 }
 
