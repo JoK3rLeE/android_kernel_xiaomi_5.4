@@ -4474,6 +4474,4 @@ static struct wm_adsp_ops wm_halo_ops = {
 	.stop_core = wm_halo_stop_core,
 };
 
-EXPORT_SYMBOL_GPL(wm_halo_early_event);
-EXPORT_SYMBOL_GPL(wm_halo_event);
 MODULE_LICENSE("GPL v2");
