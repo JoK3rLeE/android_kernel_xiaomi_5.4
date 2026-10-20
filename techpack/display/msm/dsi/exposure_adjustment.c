@@ -22,6 +22,7 @@
 #include "exposure_adjustment.h"
 
 static bool pcc_backlight_enable;
+static bool pcc_correction_active;
 static u32 last_level = ELVSS_OFF_THRESHOLD;
 
 static int ea_panel_send_pcc(struct dsi_panel *panel, u32 bl_lvl)
@@ -97,12 +98,13 @@ void ea_panel_mode_ctrl(struct dsi_panel *panel, bool enable)
 		if (!dsi_panel_initialized(panel))
 			return;
 
-		dsi_panel_set_backlight(panel, last_level);
-		if (!enable)
-			ea_panel_send_pcc(panel, ELVSS_OFF_THRESHOLD);
-	} else if (!last_level && !enable &&
+		dsi_panel_set_backlight(panel, READ_ONCE(last_level));
+		if (!enable && !ea_panel_send_pcc(panel, ELVSS_OFF_THRESHOLD))
+			WRITE_ONCE(pcc_correction_active, false);
+	} else if (!READ_ONCE(last_level) && !enable &&
 			dsi_panel_initialized(panel)) {
-		ea_panel_send_pcc(panel, ELVSS_OFF_THRESHOLD);
+		if (!ea_panel_send_pcc(panel, ELVSS_OFF_THRESHOLD))
+			WRITE_ONCE(pcc_correction_active, false);
 	}
 }
 
@@ -129,13 +131,19 @@ u32 ea_panel_calc_backlight(struct dsi_panel *panel, u32 bl_lvl)
 			pr_debug("exposure adjustment: low-brightness PCC update failed\n");
 			return requested;
 		}
+		WRITE_ONCE(pcc_correction_active, true);
 		return ELVSS_OFF_THRESHOLD;
 	}
 
-	/* Restore the neutral PCC coefficient when brightness rises again. */
-	rc = ea_panel_send_pcc(panel, ELVSS_OFF_THRESHOLD);
-	if (rc)
-		pr_debug("exposure adjustment: PCC reset failed, rc=%d\n", rc);
+	/* Restore neutral PCC only when leaving the corrected range. */
+	if (READ_ONCE(pcc_correction_active)) {
+		rc = ea_panel_send_pcc(panel, ELVSS_OFF_THRESHOLD);
+		if (rc) {
+			pr_debug("exposure adjustment: PCC reset failed, rc=%d\n", rc);
+		} else {
+			WRITE_ONCE(pcc_correction_active, false);
+		}
+	}
 
 	return bl_lvl;
 }
