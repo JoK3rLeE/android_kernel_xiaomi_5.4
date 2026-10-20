@@ -86,25 +86,43 @@ int spk_id_get_pin_3state(struct device_node *np)
 		goto out;
 	}
 
-	pinctrl_select_state(info->pinctrl, info->pull_down);
+	ret = pinctrl_select_state(info->pinctrl, info->pull_down);
+	if (ret)
+		goto out;
 	msleep(3);
 	pd = gpio_get_value(info->gpio);
+	if (pd < 0) {
+		ret = pd;
+		goto out;
+	}
 
-	pinctrl_select_state(info->pinctrl, info->pull_up);
+	ret = pinctrl_select_state(info->pinctrl, info->pull_up);
+	if (ret)
+		goto out;
 	msleep(3);
 	pu = gpio_get_value(info->gpio);
+	if (pu < 0) {
+		ret = pu;
+		goto out;
+	}
 
 	if ((pd == pu) && (pd == 0)) {
 		pr_info("%s: id pin%d = %d\n", __func__, info->gpio, pd);
-		pinctrl_select_state(info->pinctrl, info->pull_down);
+		ret = pinctrl_select_state(info->pinctrl, info->pull_down);
+		if (ret)
+			goto out;
 		info->state = PIN_PULL_DOWN;
 	} else if ((pd == pu) && (pd == 1)) {
 		pr_info("%s: id pin%d = %d\n", __func__, info->gpio, pd);
-		pinctrl_select_state(info->pinctrl, info->pull_up);
+		ret = pinctrl_select_state(info->pinctrl, info->pull_up);
+		if (ret)
+			goto out;
 		info->state = PIN_PULL_UP;
 	} else {
 		pr_info("%s: id pin%d = 2\n", __func__, info->gpio);
-		pinctrl_select_state(info->pinctrl, info->no_pull);
+		ret = pinctrl_select_state(info->pinctrl, info->no_pull);
+		if (ret)
+			goto out;
 		info->state = PIN_FLOAT;
 	}
 
