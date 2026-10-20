@@ -122,7 +122,7 @@ int ea_panel_mode_ctrl(struct dsi_panel *panel, bool enable)
 
 	rc = dsi_panel_set_backlight(panel, READ_ONCE(last_level));
 	if (rc)
-		pr_err("exposure adjustment: backlight update failed, rc=%d\\n", rc);
+		pr_err("exposure adjustment: backlight update failed, rc=%d\n", rc);
 
 	return 0;
 }
