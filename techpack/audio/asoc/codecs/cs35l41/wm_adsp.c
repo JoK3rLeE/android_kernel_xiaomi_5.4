@@ -909,7 +909,9 @@ static int wm_adsp_fw_get(struct snd_kcontrol *kcontrol,
 	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
+	mutex_lock(&dsp[e->shift_l].pwr_lock);
 	ucontrol->value.enumerated.item[0] = dsp[e->shift_l].fw;
+	mutex_unlock(&dsp[e->shift_l].pwr_lock);
 
 	return 0;
 }
@@ -920,21 +922,19 @@ static int wm_adsp_fw_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
+	unsigned int fw = ucontrol->value.enumerated.item[0];
 	int ret = 0;
 
-	if (ucontrol->value.enumerated.item[0] == dsp[e->shift_l].fw)
-		return 0;
-
-	if (ucontrol->value.enumerated.item[0] >= WM_ADSP_NUM_FW)
+	if (fw >= WM_ADSP_NUM_FW)
 		return -EINVAL;
 
 	mutex_lock(&dsp[e->shift_l].pwr_lock);
-
-	if (dsp[e->shift_l].booted || dsp[e->shift_l].compr)
+	if (fw == dsp[e->shift_l].fw)
+		ret = 0;
+	else if (dsp[e->shift_l].booted || dsp[e->shift_l].compr)
 		ret = -EBUSY;
 	else
-		dsp[e->shift_l].fw = ucontrol->value.enumerated.item[0];
-
+		dsp[e->shift_l].fw = fw;
 	mutex_unlock(&dsp[e->shift_l].pwr_lock);
 
 	return ret;
@@ -1060,7 +1060,9 @@ static int wm_adsp_block_bypass_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
+	mutex_lock(&dsp->pwr_lock);
 	ucontrol->value.enumerated.item[0] = dsp->block_bypass;
+	mutex_unlock(&dsp->pwr_lock);
 
 	return 0;
 }
@@ -1077,7 +1079,6 @@ static int wm_adsp_block_bypass_put(struct snd_kcontrol *kcontrol,
 		return -EINVAL;
 
 	mutex_lock(&dsp->pwr_lock);
-	dsp->block_bypass = value;
 	if (dsp->fw != WM_ADSP_FW_SPK_PROT) {
 		mutex_unlock(&dsp->pwr_lock);
 		return -EBUSY;
@@ -1099,6 +1100,8 @@ static int wm_adsp_block_bypass_put(struct snd_kcontrol *kcontrol,
 	if (!ret)
 		ret = tmp;
 
+	if (!ret)
+		dsp->block_bypass = value;
 	mutex_unlock(&dsp->pwr_lock);
 	return ret;
 }
@@ -1109,7 +1112,9 @@ static int wm_adsp_block_bypass_in_enh_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
+	mutex_lock(&dsp->pwr_lock);
 	ucontrol->value.enumerated.item[0] = dsp->block_bypass_in_enh;
+	mutex_unlock(&dsp->pwr_lock);
 
 	return 0;
 }
@@ -1126,7 +1131,6 @@ static int wm_adsp_block_bypass_in_enh_put(struct snd_kcontrol *kcontrol,
 		return -EINVAL;
 
 	mutex_lock(&dsp->pwr_lock);
-	dsp->block_bypass_in_enh = value;
 	if (dsp->fw != WM_ADSP_FW_SPK_PROT) {
 		mutex_unlock(&dsp->pwr_lock);
 		return -EBUSY;
@@ -1135,6 +1139,8 @@ static int wm_adsp_block_bypass_in_enh_put(struct snd_kcontrol *kcontrol,
 	ret = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_IN_ENH",
 				(value || dsp->block_bypass) ?
 				0x00400001 : 0x00000000);
+	if (!ret)
+		dsp->block_bypass_in_enh = value;
 	mutex_unlock(&dsp->pwr_lock);
 	return ret;
 }
