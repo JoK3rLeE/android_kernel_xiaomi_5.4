@@ -17,6 +17,10 @@
 #define __CS35L41_H__
 
 #include <linux/regmap.h>
+#include <linux/completion.h>
+#include <linux/regulator/consumer.h>
+
+#include "wm_adsp.h"
 
 #define CS35L41_FIRSTREG 0x00000000
 #define CS35L41_LASTREG 0x03804FE8
@@ -761,6 +765,36 @@ enum cs35l41_cspl_mboxcmd {
 	CSPL_MBOX_CMD_STOP_PRE_REINIT = 4,
 	CSPL_MBOX_CMD_UNKNOWN_CMD = -1,
 	CSPL_MBOX_CMD_INVALID_SEQUENCE = -2,
+};
+
+
+/*
+ * Per-device state shared by the codec core and the I2C transport.
+ * Keep this private to the CS35L41 driver; platform data is declared in
+ * <sound/cs35l41.h> for board integration.
+ */
+struct cs35l41_private {
+	struct device *dev;
+	struct regmap *regmap;
+	struct snd_soc_component *component;
+	struct wm_adsp dsp;
+	struct cs35l41_platform_data pdata;
+	struct regulator_bulk_data supplies[2];
+	struct completion global_pdn_done;
+	struct completion global_pup_done;
+	struct completion mbox_cmd;
+	unsigned int num_supplies;
+	unsigned int irq;
+	int reset_gpio;
+	bool bus_spi;
+	bool halo_booted;
+	bool i2s_mode;
+	bool dspa_mode;
+	enum cs35l41_cspl_mboxcmd cspl_cmd;
+	unsigned int clksrc;
+	int extclk_cfg;
+	unsigned int extclk_freq;
+	unsigned int sclk;
 };
 
 #endif /*__CS35L41_H__*/
