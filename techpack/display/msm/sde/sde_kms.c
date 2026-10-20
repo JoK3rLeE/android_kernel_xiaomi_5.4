@@ -5211,7 +5211,8 @@ void sde_kms_trigger_early_wakeup(struct sde_kms *sde_kms,
 	struct msm_drm_private *priv;
 	struct drm_encoder *drm_enc;
 
-	if (!sde_kms || !crtc) {
+	if (!sde_kms || !sde_kms->dev || !sde_kms->dev->dev_private ||
+			!crtc || !crtc->dev || !crtc->state) {
 		SDE_ERROR("invalid argument sde_kms %pK crtc %pK\n",
 			sde_kms, crtc);
 		return;
