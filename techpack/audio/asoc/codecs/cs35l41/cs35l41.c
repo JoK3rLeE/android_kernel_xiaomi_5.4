@@ -1746,15 +1746,16 @@ static int cs35l41_irq_gpio_config(struct cs35l41_private *cs35l41)
 	return irq_pol;
 }
 
-static int cs35l41_codec_remove(struct snd_soc_component *codec)
+static void cs35l41_codec_remove(struct snd_soc_component *codec)
 {
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(codec);
 	int ret;
 
 	ret = wm_adsp2_component_remove(&cs35l41->dsp, codec);
-	cs35l41->component = NULL;
+	if (ret < 0)
+		dev_warn(cs35l41->dev, "DSP component cleanup failed: %d\\n", ret);
 
-	return ret;
+	cs35l41->component = NULL;
 }
 
 static const struct snd_soc_dai_ops cs35l41_ops = {
