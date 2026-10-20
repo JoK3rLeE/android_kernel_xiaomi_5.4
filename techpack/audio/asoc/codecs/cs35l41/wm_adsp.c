@@ -947,7 +947,7 @@ static int wm_adsp_cal_z_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	ucontrol->value.enumerated.item[0] = dsp->cal_z;
+	ucontrol->value.integer.value[0] = dsp->cal_z;
 
 	return 0;
 }
@@ -958,8 +958,8 @@ static int wm_adsp_cal_z_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	dsp->cal_z = ucontrol->value.enumerated.item[0];
-	dsp->cal_chksum = dsp->cal_z + CAL_STATUS_DEFAULT;
+	dsp->cal_z = ucontrol->value.integer.value[0];
+	dsp->cal_chksum = dsp->cal_z + dsp->cal_status;
 
 	dev_info(codec->dev, "cal_z = %d\n", dsp->cal_z);
 
@@ -972,7 +972,7 @@ static int wm_adsp_ambient_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	ucontrol->value.enumerated.item[0] = dsp->ambient;
+	ucontrol->value.integer.value[0] = dsp->ambient;
 
 	return 0;
 }
@@ -983,7 +983,7 @@ static int wm_adsp_ambient_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	dsp->ambient = ucontrol->value.enumerated.item[0];
+	dsp->ambient = ucontrol->value.integer.value[0];
 
 	dev_info(codec->dev, "ambient = %d\n", dsp->ambient);
 
@@ -996,7 +996,7 @@ static int wm_adsp_cal_status_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	ucontrol->value.enumerated.item[0] = dsp->cal_status;
+	ucontrol->value.integer.value[0] = dsp->cal_status;
 
 	return 0;
 }
@@ -1007,7 +1007,8 @@ static int wm_adsp_cal_status_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	dsp->cal_status = ucontrol->value.enumerated.item[0];
+	dsp->cal_status = ucontrol->value.integer.value[0];
+	dsp->cal_chksum = dsp->cal_z + dsp->cal_status;
 
 	dev_info(codec->dev, "cal_status = %d\n", dsp->cal_status);
 
@@ -1020,7 +1021,7 @@ static int wm_adsp_cal_chksum_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	ucontrol->value.enumerated.item[0] = dsp->cal_chksum;
+	ucontrol->value.integer.value[0] = dsp->cal_chksum;
 
 	return 0;
 }
@@ -1031,7 +1032,7 @@ static int wm_adsp_cal_chksum_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
-	dsp->cal_chksum = ucontrol->value.enumerated.item[0];
+	dsp->cal_chksum = ucontrol->value.integer.value[0];
 
 	dev_info(codec->dev, "cal_chksum = %d\n", dsp->cal_chksum);
 
