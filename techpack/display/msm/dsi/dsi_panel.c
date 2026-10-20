@@ -748,6 +748,9 @@ u32 dsi_panel_get_fod_dim_alpha(struct dsi_panel *panel)
 int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
 {
 	int rc = 0;
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+	bool ea_disabled = false;
+#endif
 	enum dsi_cmd_set_type type = status ?
 		DSI_CMD_SET_DISP_HBM_FOD_ON : DSI_CMD_SET_DISP_HBM_FOD_OFF;
 
@@ -763,6 +766,7 @@ int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
 		if (ea_panel_is_enabled() && !panel->resend_ea) {
 			ea_panel_mode_ctrl(panel, false);
 			panel->resend_ea = true;
+			ea_disabled = true;
 		}
 #endif
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_HBM_FOD_ON);
@@ -770,7 +774,7 @@ int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
 			pr_err("[%s] failed to send DSI_CMD_SET_DISP_HBM_FOD_ON cmd, rc=%d\n",
 					panel->name, rc);
 #ifdef CONFIG_EXPOSURE_ADJUSTMENT
-			if (panel->resend_ea) {
+			if (ea_disabled) {
 				ea_panel_mode_ctrl(panel, true);
 				panel->resend_ea = false;
 			}
@@ -801,6 +805,9 @@ int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
 int dsi_panel_set_hbm(struct dsi_panel *panel, bool enable)
 {
 	int rc;
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+	bool ea_disabled = false;
+#endif
 	enum dsi_cmd_set_type type = enable ?
 		DSI_CMD_SET_DISP_HBM_ON : DSI_CMD_SET_DISP_HBM_OFF;
 
@@ -826,6 +833,7 @@ int dsi_panel_set_hbm(struct dsi_panel *panel, bool enable)
 	if (enable && ea_panel_is_enabled() && !panel->resend_ea_hbm) {
 		ea_panel_mode_ctrl(panel, false);
 		panel->resend_ea_hbm = true;
+		ea_disabled = true;
 	}
 #endif
 	rc = dsi_panel_tx_cmd_set(panel, type);
@@ -833,7 +841,7 @@ int dsi_panel_set_hbm(struct dsi_panel *panel, bool enable)
 		pr_err("[%s] failed to send manual HBM %s command, rc=%d\n",
 			panel->name, enable ? "on" : "off", rc);
 #ifdef CONFIG_EXPOSURE_ADJUSTMENT
-		if (enable && panel->resend_ea_hbm) {
+		if (ea_disabled) {
 			ea_panel_mode_ctrl(panel, true);
 			panel->resend_ea_hbm = false;
 		}
