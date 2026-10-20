@@ -408,7 +408,7 @@ int32_t cam_actuator_publish_dev_info(struct cam_req_mgr_device_info *info)
 	return 0;
 }
 
-#ifdef CONFIG_VCM_AK7374
+#if defined(CONFIG_VCM_AK7374) || defined(CONFIG_MACH_XIAOMI_CEPHEUS)
 /* ----------------------------------------------------
 * Anti-Actuator-Noise logic start,
 * Re-config actuator eeprom values
@@ -799,7 +799,7 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 			goto rel_pkt_buf;
 		}
 
-#ifdef CONFIG_VCM_AK7374
+#if defined(CONFIG_VCM_AK7374) || defined(CONFIG_MACH_XIAOMI_CEPHEUS)
 		cam_actuator_anti_noise(a_ctrl, &a_ctrl->i2c_data.init_settings);
 #endif
 
