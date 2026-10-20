@@ -1933,6 +1933,12 @@ static int cs35l41_dsp_init(struct cs35l41_private *cs35l41)
 	if (ret < 0)
 		return ret;
 
+	/* Match the factory defaults used by MiCode's Cepheus Q driver. */
+	dsp->cal_z = 8392;
+	dsp->ambient = 30;
+	dsp->cal_status = 1;
+	dsp->cal_chksum = dsp->cal_z + dsp->cal_status;
+
 	cs35l41->halo_booted = false;
 
 	ret = regmap_write(cs35l41->regmap, CS35L41_DSP1_RX5_SRC,
