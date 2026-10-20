@@ -2030,6 +2030,7 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 	int timeout = 100;
 	int irq_pol = 0;
 	bool supplies_enabled = false;
+	bool irq_requested = false;
 
 	dev_dbg(cs35l41->dev, "Starting CS35L41 probe\n");
 
@@ -2179,6 +2180,7 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 		dev_err(cs35l41->dev, "Failed to request IRQ: %d\n", ret);
 		goto err;
 	}
+	irq_requested = true;
 
 	/* Set interrupt masks for critical errors. */
 	ret = regmap_write(cs35l41->regmap, CS35L41_IRQ1_MASK1,
@@ -2238,6 +2240,12 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 	return 0;
 
 err:
+	/*
+	 * The IRQ is devm-managed, so it remains registered until probe
+	 * unwinds. Quiesce its threaded handler before dropping the supplies.
+	 */
+	if (irq_requested)
+		disable_irq(cs35l41->irq);
 	if (supplies_enabled)
 		regulator_bulk_disable(cs35l41->num_supplies, cs35l41->supplies);
 	return ret;
