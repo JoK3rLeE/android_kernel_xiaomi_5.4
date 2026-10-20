@@ -21,6 +21,7 @@
 #include <linux/regulator/consumer.h>
 
 #include "wm_adsp.h"
+#include <sound/cs35l41.h>
 
 #define CS35L41_FIRSTREG 0x00000000
 #define CS35L41_LASTREG 0x03804FE8
