@@ -3459,6 +3459,8 @@ static int wm_halo_configure_mpu(struct wm_adsp *dsp)
 	unsigned int xm_sz, xm_bank_sz, ym_sz, ym_bank_sz;
 	unsigned int xm_acc_cfg, ym_acc_cfg;
 	unsigned int lock_cfg;
+	bool mpu_unlocked = false;
+	int lock_ret;
 
 	ret = regmap_read(regmap, sysinfo_base + HALO_SYS_INFO_XM_BANK_SIZE,
 			  &xm_bank_sz);
@@ -3536,6 +3538,8 @@ static int wm_halo_configure_mpu(struct wm_adsp *dsp)
 		adsp_err(dsp, "Error while unlocking MPU: %d\n", ret);
 		goto err;
 	}
+	/* Even a partial unlock sequence must be closed on every failure path. */
+	mpu_unlocked = true;
 
 	ret = regmap_write(regmap, dsp_base + HALO_MPU_LOCK_CONFIG,
 			   HALO_MPU_UNLOCK_CODE_1);
@@ -3568,12 +3572,24 @@ static int wm_halo_configure_mpu(struct wm_adsp *dsp)
 			goto err;
 	}
 
-	/* lock MPU */
+	/* Lock the MPU before returning, including on configuration errors. */
 	ret = regmap_write(regmap, dsp_base + HALO_MPU_LOCK_CONFIG, 0);
-	if (ret)
+	if (ret) {
 		adsp_err(dsp, "Error while locking MPU: %d\n", ret);
+		goto err;
+	}
+	mpu_unlocked = false;
 
 err:
+	if (mpu_unlocked) {
+		lock_ret = regmap_write(regmap, dsp_base + HALO_MPU_LOCK_CONFIG, 0);
+		if (lock_ret) {
+			adsp_err(dsp, "Failed to relock MPU after setup error: %d\n",
+				 lock_ret);
+			if (!ret)
+				ret = lock_ret;
+		}
+	}
 	return ret;
 }
 
