@@ -1070,37 +1070,37 @@ static int wm_adsp_block_bypass_put(struct snd_kcontrol *kcontrol,
 {
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
+	int value = ucontrol->value.enumerated.item[0];
+	int ret = 0, tmp;
 
-	dsp->block_bypass = ucontrol->value.enumerated.item[0];
+	if (value > 1)
+		return -EINVAL;
 
-	switch (dsp->block_bypass) {
-	case 0:
-		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_IN_ENH",
-				  0x00000000);
-		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_EQ",
-				  0x00000000);
-		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_ACTI",
-				  0x00000000);
-		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_MBL",
-				  0x00000000);
-		break;
-	case 1:
-		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_IN_ENH",
-				  0x00400001);
-		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_EQ",
-				  0x00400001);
-		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_ACTI",
-				  0x00400001);
-		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_MBL",
-				  0x00400001);
-		break;
-	default:
-		break;
+	mutex_lock(&dsp->pwr_lock);
+	dsp->block_bypass = value;
+
+	if (dsp->fw != WM_ADSP_FW_SPK_PROT) {
+		mutex_unlock(&dsp->pwr_lock);
+		return -EBUSY;
 	}
 
-	dev_info(codec->dev, "block_bypass = %d\n", dsp->block_bypass);
+	ret = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_IN_ENH",
+				value ? 0x00400001 : 0x00000000);
+	tmp = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_EQ",
+				value ? 0x00400001 : 0x00000000);
+	if (!ret)
+		ret = tmp;
+	tmp = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_ACTI",
+				value ? 0x00400001 : 0x00000000);
+	if (!ret)
+		ret = tmp;
+	tmp = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_MBL",
+				value ? 0x00400001 : 0x00000000);
+	if (!ret)
+		ret = tmp;
 
-	return 0;
+	mutex_unlock(&dsp->pwr_lock);
+	return ret;
 }
 
 static int wm_adsp_block_bypass_in_enh_get(struct snd_kcontrol *kcontrol,
@@ -1119,32 +1119,23 @@ static int wm_adsp_block_bypass_in_enh_put(struct snd_kcontrol *kcontrol,
 {
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
+	int value = ucontrol->value.enumerated.item[0];
+	int ret;
 
-	dsp->block_bypass_in_enh = ucontrol->value.enumerated.item[0];
+	if (value > 1)
+		return -EINVAL;
 
-	switch (dsp->block_bypass_in_enh) {
-	case 0:
-		dev_info(codec->dev,
-			 "block_bypass_in_enh = %d, put 0x00000000.\n",
-			 dsp->block_bypass_in_enh);
-		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_IN_ENH",
-				  0x00000000);
-		break;
-	case 1:
-		dev_info(codec->dev,
-			 "block_bypass_in_enh = %d, put 0x00400001.\n",
-			 dsp->block_bypass_in_enh);
-		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_IN_ENH",
-				  0x00400001);
-		break;
-	default:
-		break;
+	mutex_lock(&dsp->pwr_lock);
+	dsp->block_bypass_in_enh = value;
+	if (dsp->fw != WM_ADSP_FW_SPK_PROT) {
+		mutex_unlock(&dsp->pwr_lock);
+		return -EBUSY;
 	}
 
-	dev_info(codec->dev, "block_bypass_in_enh = %d\n",
-		 dsp->block_bypass_in_enh);
-
-	return 0;
+	ret = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_IN_ENH",
+				value ? 0x00400001 : 0x00000000);
+	mutex_unlock(&dsp->pwr_lock);
+	return ret;
 }
 
 static const struct soc_enum wm_adsp_fw_enum[] = {
