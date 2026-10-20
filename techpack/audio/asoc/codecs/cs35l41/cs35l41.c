@@ -1996,6 +1996,7 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 	u32 regid, reg_revid, i, mtl_revid, int_status, chipid_match;
 	int timeout = 100;
 	int irq_pol = 0;
+	bool supplies_enabled = false;
 
 	dev_info(cs35l41->dev, "cs35l41 proble\n");
 
@@ -2032,6 +2033,7 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 			ret);
 		return ret;
 	}
+	supplies_enabled = true;
 
 	/* returning NULL can be an option if in stereo mode */
 	cs35l41->reset_gpio = of_get_named_gpio(cs35l41->dev->of_node,
@@ -2130,9 +2132,8 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 
 	/* CS35L41 needs INT for PDN_DONE */
 	if (ret != 0) {
-		dev_err(cs35l41->dev, "Failed to request IRQ: %d\n",
-			cs35l41->irq);
-		//goto err;
+		dev_err(cs35l41->dev, "Failed to request IRQ: %d\n", ret);
+		goto err;
 	}
 
 	/* Set interrupt masks for critical errors */
@@ -2185,9 +2186,11 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 
 	dev_info(cs35l41->dev, "Cirrus Logic CS35L41 (%x), Revision: %02X\n",
 		 regid, reg_revid);
+	return 0;
 
 err:
-	regulator_bulk_disable(cs35l41->num_supplies, cs35l41->supplies);
+	if (supplies_enabled)
+		regulator_bulk_disable(cs35l41->num_supplies, cs35l41->supplies);
 	return ret;
 }
 
