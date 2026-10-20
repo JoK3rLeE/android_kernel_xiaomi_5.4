@@ -4153,24 +4153,37 @@ int wm_adsp2_component_probe(struct wm_adsp *dsp, struct snd_soc_component *code
 {
 	struct snd_soc_dapm_context *dapm = snd_soc_component_get_dapm(codec);
 	char preload[32];
+	int ret;
 
 	snprintf(preload, ARRAY_SIZE(preload), "DSP%d Preload", dsp->num);
 	snd_soc_dapm_disable_pin(dapm, preload);
 
+	dsp->component = codec;
 	wm_adsp2_init_debugfs(dsp, codec);
 
-	dsp->component = codec;
+	ret = snd_soc_add_component_controls(codec, wm_adsp_cal_controls,
+					     ARRAY_SIZE(wm_adsp_cal_controls));
+	if (ret)
+		goto err_cleanup;
 
-	snd_soc_add_component_controls(codec, wm_adsp_cal_controls,
-				   ARRAY_SIZE(wm_adsp_cal_controls));
-
-	return snd_soc_add_component_controls(
+	ret = snd_soc_add_component_controls(
 		codec, &wm_adsp_fw_controls[dsp->num - 1], 1);
+	if (ret)
+		goto err_cleanup;
+
+	return 0;
+
+err_cleanup:
+	wm_adsp2_cleanup_debugfs(dsp);
+	dsp->component = NULL;
+	return ret;
 }
 
 int wm_adsp2_component_remove(struct wm_adsp *dsp, struct snd_soc_component *codec)
 {
 	wm_adsp2_cleanup_debugfs(dsp);
+	if (dsp->component == codec)
+		dsp->component = NULL;
 
 	return 0;
 }
