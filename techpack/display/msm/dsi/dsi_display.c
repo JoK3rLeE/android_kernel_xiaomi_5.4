@@ -5729,7 +5729,7 @@ static ssize_t sysfs_fod_hbm_write(struct device *dev,
 {
 	struct dsi_display *display;
 	unsigned int val;
-	int rc;
+	int rc, clk_rc;
 
 	display = dev_get_drvdata(dev);
 	if (!display || !display->panel) {
@@ -5765,11 +5765,16 @@ static ssize_t sysfs_fod_hbm_write(struct device *dev,
 	}
 
 	rc = dsi_panel_set_fod_hbm(display->panel, !!val);
-	if (rc)
+	if (rc) {
 		pr_err("dsi_panel_set_fod_hbm(%u) failed: %d\n", !!val, rc);
+	} else {
+		dsi_display_set_fod_ui(display, !!val);
+	}
 
-	dsi_display_clk_ctrl(display->dsi_clk_handle,
-			     DSI_ALL_CLKS, DSI_CLK_OFF);
+	clk_rc = dsi_display_clk_ctrl(display->dsi_clk_handle,
+				      DSI_ALL_CLKS, DSI_CLK_OFF);
+	if (!rc)
+		rc = clk_rc;
 out_unlock:
 	mutex_unlock(&display->panel->panel_lock);
 	if (rc)
