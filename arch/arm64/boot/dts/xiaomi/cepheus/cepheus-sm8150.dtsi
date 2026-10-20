@@ -240,6 +240,33 @@ And public attribution of xiaomi platforms(like F1 and so and)
 		gpio = <&tlmm 21 0>;
 	};
 
+	dsi_amoled_panel_pwr_external_supply: dsi_amoled_panel_pwr_external_supply {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		qcom,panel-supply-entry@0 {
+			reg = <0>;
+			qcom,supply-name = "vddio";
+			qcom,supply-min-voltage = <1880000>;
+			qcom,supply-max-voltage = <1880000>;
+			qcom,supply-enable-load = <62000>;
+			qcom,supply-disable-load = <80>;
+			//qcom,supply-post-on-sleep = <20>;
+		};
+
+		qcom,panel-supply-entry@1 {
+			reg = <1>;
+			qcom,supply-name = "vcie";
+			qcom,supply-min-voltage = <3000000>;
+			qcom,supply-max-voltage = <3000000>;
+			qcom,supply-enable-load = <62000>;
+			qcom,supply-disable-load = <80>;
+			qcom,supply-post-on-sleep = <10>;
+			qcom,supply-pre-off-sleep = <10>;
+		};
+	};
+
+
 	/*
 	 * The EA8076 panel power-entry table is shared with the Raphael
 	 * display definitions, but Cepheus has its own VCI GPIO regulator.
