@@ -4058,6 +4058,17 @@ static int wm_halo_apply_calibration(struct snd_soc_dapm_widget *w)
 		wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_R");
 		wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_STATUS");
 		wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_CHECKSUM");
+
+		/* Restore user-selected bypass state after firmware reload. */
+		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_IN_ENH",
+				  (dsp->block_bypass || dsp->block_bypass_in_enh) ?
+				  0x00400001 : 0x00000000);
+		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_EQ",
+				  dsp->block_bypass ? 0x00400001 : 0x00000000);
+		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_ACTI",
+				  dsp->block_bypass ? 0x00400001 : 0x00000000);
+		wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS_MBL",
+				  dsp->block_bypass ? 0x00400001 : 0x00000000);
 		break;
 	default:
 		break;
