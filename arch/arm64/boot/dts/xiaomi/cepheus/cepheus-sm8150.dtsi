@@ -349,6 +349,7 @@ And public attribution of xiaomi platforms(like F1 and so and)
 };
 
 &sde_dsi {
+	qcom,dsi-default-panel = <&dsi_samsung_fhd_ea8076_f1mp_cmd>;
 	vcie-supply = <&disp_vci_vreg>;
 };
 
