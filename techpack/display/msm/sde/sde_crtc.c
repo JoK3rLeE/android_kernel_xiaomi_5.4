@@ -4738,7 +4738,7 @@ static int sde_crtc_fod_atomic_check(struct sde_crtc_state *cstate,
 	if (!cstate->fod_dim_layer)
 		return 0;
 
-	kms = _sde_crtc_get_kms(&cstate->base);
+	kms = _sde_crtc_get_kms(cstate->base.crtc);
 	if (!kms || !kms->catalog) {
 		cstate->fod_dim_layer = NULL;
 		return -EINVAL;
