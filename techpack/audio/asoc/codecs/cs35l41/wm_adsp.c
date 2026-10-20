@@ -947,7 +947,9 @@ static int wm_adsp_cal_z_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
+	mutex_lock(&dsp->pwr_lock);
 	ucontrol->value.integer.value[0] = dsp->cal_z;
+	mutex_unlock(&dsp->pwr_lock);
 
 	return 0;
 }
@@ -958,10 +960,12 @@ static int wm_adsp_cal_z_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
+	mutex_lock(&dsp->pwr_lock);
 	dsp->cal_z = ucontrol->value.integer.value[0];
 	dsp->cal_chksum = dsp->cal_z + dsp->cal_status;
+	mutex_unlock(&dsp->pwr_lock);
 
-	dev_info(codec->dev, "cal_z = %d\n", dsp->cal_z);
+	dev_dbg(codec->dev, "cal_z = %d\n", dsp->cal_z);
 
 	return 0;
 }
@@ -972,7 +976,9 @@ static int wm_adsp_ambient_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
+	mutex_lock(&dsp->pwr_lock);
 	ucontrol->value.integer.value[0] = dsp->ambient;
+	mutex_unlock(&dsp->pwr_lock);
 
 	return 0;
 }
@@ -983,9 +989,11 @@ static int wm_adsp_ambient_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
+	mutex_lock(&dsp->pwr_lock);
 	dsp->ambient = ucontrol->value.integer.value[0];
+	mutex_unlock(&dsp->pwr_lock);
 
-	dev_info(codec->dev, "ambient = %d\n", dsp->ambient);
+	dev_dbg(codec->dev, "ambient = %d\n", dsp->ambient);
 
 	return 0;
 }
@@ -996,7 +1004,9 @@ static int wm_adsp_cal_status_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
+	mutex_lock(&dsp->pwr_lock);
 	ucontrol->value.integer.value[0] = dsp->cal_status;
+	mutex_unlock(&dsp->pwr_lock);
 
 	return 0;
 }
@@ -1007,10 +1017,12 @@ static int wm_adsp_cal_status_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
+	mutex_lock(&dsp->pwr_lock);
 	dsp->cal_status = ucontrol->value.integer.value[0];
 	dsp->cal_chksum = dsp->cal_z + dsp->cal_status;
+	mutex_unlock(&dsp->pwr_lock);
 
-	dev_info(codec->dev, "cal_status = %d\n", dsp->cal_status);
+	dev_dbg(codec->dev, "cal_status = %d\n", dsp->cal_status);
 
 	return 0;
 }
@@ -1021,7 +1033,9 @@ static int wm_adsp_cal_chksum_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
+	mutex_lock(&dsp->pwr_lock);
 	ucontrol->value.integer.value[0] = dsp->cal_chksum;
+	mutex_unlock(&dsp->pwr_lock);
 
 	return 0;
 }
@@ -1032,9 +1046,11 @@ static int wm_adsp_cal_chksum_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 	struct wm_adsp *dsp = snd_soc_component_get_drvdata(codec);
 
+	mutex_lock(&dsp->pwr_lock);
 	dsp->cal_chksum = ucontrol->value.integer.value[0];
+	mutex_unlock(&dsp->pwr_lock);
 
-	dev_info(codec->dev, "cal_chksum = %d\n", dsp->cal_chksum);
+	dev_dbg(codec->dev, "cal_chksum = %d\n", dsp->cal_chksum);
 
 	return 0;
 }
