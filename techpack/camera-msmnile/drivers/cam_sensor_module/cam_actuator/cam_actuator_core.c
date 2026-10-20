@@ -445,31 +445,34 @@ unsigned int aan_ak7374_verify[AAN_AK7374_READ_NUM][2] = {
 	{0x24, 0x00}, {0x25, 0x00}
 };
 
-static void aan_i2c_read(struct camera_io_master *io_master_info, struct i2c_settings_list *i2c_list, unsigned short addr, unsigned short *data)
+static int aan_i2c_read(struct camera_io_master *io_master_info,
+		struct i2c_settings_list *i2c_list, unsigned short addr,
+		unsigned short *data)
 {
-	int rc = 0;
+	int rc;
 
 	i2c_list->i2c_settings.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	i2c_list->i2c_settings.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 
-	rc = camera_io_dev_read(
-					io_master_info,
-					addr,
-					(uint32_t *)(data),
-					i2c_list->i2c_settings.addr_type,
-					i2c_list->i2c_settings.data_type);
-
+	rc = camera_io_dev_read(io_master_info, addr, (uint32_t *)data,
+			i2c_list->i2c_settings.addr_type,
+			i2c_list->i2c_settings.data_type);
 	if (rc < 0) {
-		CAM_ERR(CAM_ACTUATOR, "aan, aan_i2c_read failed: %d", rc);
-	} else {
-		CAM_DBG(CAM_ACTUATOR, "aan, aan_i2c_read, addr=0x%x, data=0x%x, data_addr=0x%x, sid=0x%x",
-			addr, *data, data, io_master_info->cci_client->sid);
+		CAM_ERR(CAM_ACTUATOR, "aan, I2C read failed: addr=0x%x rc=%d",
+			addr, rc);
+		return rc;
 	}
+
+	CAM_DBG(CAM_ACTUATOR, "aan, I2C read addr=0x%x data=0x%x sid=0x%x",
+		addr, *data, io_master_info->cci_client->sid);
+	return 0;
 }
 
-static void aan_i2c_write(struct camera_io_master *io_master_info, struct i2c_settings_list *i2c_list, unsigned short addr, unsigned short data)
+static int aan_i2c_write(struct camera_io_master *io_master_info,
+		struct i2c_settings_list *i2c_list, unsigned short addr,
+		unsigned short data)
 {
-	int32_t rc = 0;
+	int rc;
 
 	i2c_list->i2c_settings.reg_setting[0].reg_addr = addr;
 	i2c_list->i2c_settings.reg_setting[0].reg_data = data;
@@ -478,133 +481,172 @@ static void aan_i2c_write(struct camera_io_master *io_master_info, struct i2c_se
 	i2c_list->op_code = CAM_SENSOR_I2C_WRITE_RANDOM;
 	i2c_list->i2c_settings.size = 1;
 
-	rc = camera_io_dev_write(io_master_info, &(i2c_list->i2c_settings));
+	rc = camera_io_dev_write(io_master_info, &i2c_list->i2c_settings);
 	if (rc < 0) {
-		CAM_ERR(CAM_ACTUATOR, "aan, aan_i2c_write failed: %d", rc);
-	} else {
-		CAM_DBG(CAM_ACTUATOR, "aan, aan_i2c_write, addr=0x%x, data=0x%x, sid=%d", addr, data, io_master_info->cci_client->sid);
+		CAM_ERR(CAM_ACTUATOR, "aan, I2C write failed: addr=0x%x rc=%d",
+			addr, rc);
+		return rc;
 	}
+
+	CAM_DBG(CAM_ACTUATOR, "aan, I2C write addr=0x%x data=0x%x sid=0x%x",
+		addr, data, io_master_info->cci_client->sid);
+	return 0;
 }
 
-static int32_t cam_actuator_anti_noise(struct cam_actuator_ctrl_t *a_ctrl, struct i2c_settings_array *i2c_set)
+static int32_t cam_actuator_anti_noise(struct cam_actuator_ctrl_t *a_ctrl,
+		struct i2c_settings_array *i2c_set)
 {
-	unsigned int i = 0;
+	unsigned int i;
 	unsigned short dat = 0;
 	struct i2c_settings_list *i2c_list;
-	unsigned int ret = 0;
 	unsigned int sid_backup;
+	bool verified = false;
+	int rc = 0;
 
-	if (aan_already_write == 1) {
-		CAM_DBG(CAM_ACTUATOR, "aan, eeprom already set");
-		return 0;
-	} else {
-		CAM_DBG(CAM_ACTUATOR, "aan, in");
-	}
-
-	if (a_ctrl != NULL && a_ctrl->io_master_info.cci_client != NULL) {
-		sid_backup = a_ctrl->io_master_info.cci_client->sid;
-	} else {
-		CAM_ERR(CAM_ACTUATOR, "aan, invalid param,  a_ctrl or cci_client is NULL, a_ctrl=0x%p", a_ctrl);
-		return 0;
-	}
-	CAM_DBG(CAM_ACTUATOR, "aan, orig a_ctrl->io_master_info.cci_client->sid=%d", sid_backup);
-
-	if ((AAN_AK7374_MASK >> 1) != a_ctrl->io_master_info.cci_client->sid) {
-		CAM_ERR(CAM_ACTUATOR, "aan, not 2nd provider module, no need update.");
+	if (aan_already_write) {
+		CAM_DBG(CAM_ACTUATOR, "aan, actuator EEPROM already verified");
 		return 0;
 	}
 
-	if (a_ctrl == NULL || i2c_set == NULL) {
-		CAM_ERR(CAM_ACTUATOR, "aan, cam_actuator_anti_noise, Invalid Args");
-		ret = -EINVAL;
-		goto aan_out;
+	if (!a_ctrl || !i2c_set || !a_ctrl->io_master_info.cci_client) {
+		CAM_ERR(CAM_ACTUATOR, "aan, invalid actuator/I2C settings");
+		return -EINVAL;
 	}
 
 	if (i2c_set->is_settings_valid != 1) {
-		CAM_ERR(CAM_ACTUATOR, "aan, cam_actuator_anti_noise, Invalid Args");
-		ret = -EINVAL;
-		goto aan_out;
+		CAM_ERR(CAM_ACTUATOR, "aan, init settings are invalid");
+		return -EINVAL;
 	}
 
-	list_for_each_entry(i2c_list, &(i2c_set->list_head), list) {
-		CAM_DBG(CAM_ACTUATOR, "aan, cam_actuator_anti_noise start. sid=%d, master_type=%d, i2c_set->request_id=%d",
-			a_ctrl->io_master_info.cci_client->sid, a_ctrl->io_master_info.master_type, i2c_set->request_id);
+	sid_backup = a_ctrl->io_master_info.cci_client->sid;
+	if ((AAN_AK7374_MASK >> 1) != sid_backup) {
+		CAM_DBG(CAM_ACTUATOR, "aan, SID 0x%x is not the AK7374 module",
+			sid_backup);
+		return 0;
+	}
 
-		// for 2nd provider AK7374
-		a_ctrl->io_master_info.cci_client->sid = AAN_AK7374_MASK>>1; //AK7374 EEPROM mask
-		aan_i2c_read(&(a_ctrl->io_master_info), i2c_list, 0x03, &dat);
-		if (dat == 0x0E) {
-			//Step 1: Check whethre need to update the eeprom.
-			for (i = 0; i < AAN_AK7374_READ_NUM; i++) {
-				aan_i2c_read(&(a_ctrl->io_master_info), i2c_list, aan_ak7374_verify[i][0], &dat);
-				if (dat != aan_ak7374_verify[i][1])	{
-					CAM_ERR(CAM_ACTUATOR, "aan, eeprom data not match, i=%d, addr=0x%x, expect=0x%x, real=0x%x",
-						i, aan_ak7374_verify[i][0], aan_ak7374_verify[i][1], dat);
-					break;
-				}
-			}
-			if (i == AAN_AK7374_READ_NUM) {
-				CAM_ERR(CAM_ACTUATOR, "aan, do not need update");
-				aan_already_write = 1;
-				goto aan_out;
-			}
+	list_for_each_entry(i2c_list, &i2c_set->list_head, list) {
+		CAM_DBG(CAM_ACTUATOR, "aan, checking AK7374 SID=0x%x request=%d",
+			sid_backup, i2c_set->request_id);
 
-			//Step 2: Update the eeprom PID.
-			for (i = 0; i < AAN_AK7374_WRITE_NUM; i++) {
-				aan_i2c_write(&(a_ctrl->io_master_info), i2c_list, aan_ak7374_setting[i][0], aan_ak7374_setting[i][1]);
-				if (0x03 == aan_ak7374_setting[i][0]) {
-					msleep(100);
-				}
-			}
-
-			//Step 3: Check registers flag1
-			aan_i2c_read(&(a_ctrl->io_master_info), i2c_list, 0x4B, &dat);
-			if (dat != 0) {
-				for (i = AAN_AK7374_WRITE_NUM-4; i < AAN_AK7374_WRITE_NUM; i++) {
-					aan_i2c_write(&(a_ctrl->io_master_info), i2c_list, aan_ak7374_setting[i][0], aan_ak7374_setting[i][1]);
-				}
-				aan_i2c_read(&(a_ctrl->io_master_info), i2c_list, 0x4B, &dat);
-				if (dat != 0) {
-					CAM_ERR(CAM_ACTUATOR, "aan, ak7374_write failed, 0x4B=0x%x", dat);
-					goto aan_out;
-				}
-			}
-
-			//Step 4: Check register flag2
-			aan_i2c_write(&(a_ctrl->io_master_info), i2c_list, 0x03, 0x10);
-			msleep(100);
-			aan_i2c_write(&(a_ctrl->io_master_info), i2c_list, 0xAE, 0x0);
-			msleep(100);
-			aan_i2c_read(&(a_ctrl->io_master_info), i2c_list, 0x0A, &dat);
-			if (dat != 0x89) {
-				CAM_ERR(CAM_ACTUATOR, "aan, ak7374 flag2 failed, 0x0A, expect=0x89, real=0x%x", dat);
-			}
-			CAM_DBG(CAM_ACTUATOR, "aan, ak7374_write done");
-
-			//Step 5: Verify PID data
-			for (i = 0; i < AAN_AK7374_READ_NUM; i++) {
-				aan_i2c_read(&(a_ctrl->io_master_info), i2c_list, aan_ak7374_verify[i][0], &dat);
-				if (dat != aan_ak7374_verify[i][1]) {
-					CAM_ERR(CAM_ACTUATOR, "aan, ak7374_write failed, i=%d, addr=0x%x,, expect=0x%x, real=0x%x",
-						i, aan_ak7374_verify[i][0], aan_ak7374_verify[i][1], dat);
-					break;
-				}
-			}
-			if (i == AAN_AK7374_READ_NUM) {
-				CAM_DBG(CAM_ACTUATOR, "aan, ak7374_write success.");
-			} else {
-				CAM_ERR(CAM_ACTUATOR, "aan, ak7374_write failed.");
-			}
-			goto aan_out;
-		} else {
-			CAM_ERR(CAM_ACTUATOR, "aan, not ak7374, 0x03=0x%x", dat);
+		/* The vendor sequence addresses the AK7374 EEPROM at SID 0x74. */
+		a_ctrl->io_master_info.cci_client->sid = AAN_AK7374_MASK >> 1;
+		rc = aan_i2c_read(&a_ctrl->io_master_info, i2c_list, 0x03,
+				  &dat);
+		if (rc < 0)
+			goto out;
+		if (dat != 0x0E) {
+			CAM_DBG(CAM_ACTUATOR, "aan, SID 0x%x is not AK7374 (0x03=0x%x)",
+				sid_backup, dat);
+			goto out;
 		}
+
+		/* Avoid rewriting the EEPROM when the expected values are present. */
+		for (i = 0; i < AAN_AK7374_READ_NUM; i++) {
+			rc = aan_i2c_read(&a_ctrl->io_master_info, i2c_list,
+					  aan_ak7374_verify[i][0], &dat);
+			if (rc < 0)
+				goto out;
+			if (dat != aan_ak7374_verify[i][1]) {
+				CAM_DBG(CAM_ACTUATOR,
+					"aan, EEPROM mismatch addr=0x%x expected=0x%x actual=0x%x",
+					 aan_ak7374_verify[i][0],
+					 aan_ak7374_verify[i][1], dat);
+				break;
+			}
+		}
+		if (i == AAN_AK7374_READ_NUM) {
+			verified = true;
+			goto out;
+		}
+
+		/* Program the vendor anti-noise EEPROM values. */
+		for (i = 0; i < AAN_AK7374_WRITE_NUM; i++) {
+			rc = aan_i2c_write(&a_ctrl->io_master_info, i2c_list,
+					   aan_ak7374_setting[i][0],
+					   aan_ak7374_setting[i][1]);
+			if (rc < 0)
+				goto out;
+			if (aan_ak7374_setting[i][0] == 0x03)
+				msleep(100);
+		}
+
+		/* Retry the final sequence if the device's write flag is still set. */
+		rc = aan_i2c_read(&a_ctrl->io_master_info, i2c_list, 0x4B,
+				  &dat);
+		if (rc < 0)
+			goto out;
+		if (dat != 0) {
+			for (i = AAN_AK7374_WRITE_NUM - 4;
+			     i < AAN_AK7374_WRITE_NUM; i++) {
+				rc = aan_i2c_write(&a_ctrl->io_master_info, i2c_list,
+						   aan_ak7374_setting[i][0],
+						   aan_ak7374_setting[i][1]);
+				if (rc < 0)
+					goto out;
+			}
+			rc = aan_i2c_read(&a_ctrl->io_master_info, i2c_list,
+					  0x4B, &dat);
+			if (rc < 0)
+				goto out;
+			if (dat != 0) {
+				CAM_ERR(CAM_ACTUATOR,
+					"aan, AK7374 EEPROM write flag remains set: 0x4B=0x%x",
+					dat);
+				rc = -EIO;
+				goto out;
+			}
+		}
+
+		rc = aan_i2c_write(&a_ctrl->io_master_info, i2c_list, 0x03, 0x10);
+		if (rc < 0)
+			goto out;
+		msleep(100);
+		rc = aan_i2c_write(&a_ctrl->io_master_info, i2c_list, 0xAE, 0x00);
+		if (rc < 0)
+			goto out;
+		msleep(100);
+
+		rc = aan_i2c_read(&a_ctrl->io_master_info, i2c_list, 0x0A, &dat);
+		if (rc < 0)
+			goto out;
+		if (dat != 0x89) {
+			CAM_ERR(CAM_ACTUATOR,
+				"aan, AK7374 flag2 mismatch: expected=0x89 actual=0x%x",
+				dat);
+			rc = -EIO;
+			goto out;
+		}
+
+		/* Never mark the sequence complete until all values read back. */
+		for (i = 0; i < AAN_AK7374_READ_NUM; i++) {
+			rc = aan_i2c_read(&a_ctrl->io_master_info, i2c_list,
+					  aan_ak7374_verify[i][0], &dat);
+			if (rc < 0)
+				goto out;
+			if (dat != aan_ak7374_verify[i][1]) {
+				CAM_ERR(CAM_ACTUATOR,
+					"aan, AK7374 verify failed addr=0x%x expected=0x%x actual=0x%x",
+					 aan_ak7374_verify[i][0],
+					 aan_ak7374_verify[i][1], dat);
+				rc = -EIO;
+				goto out;
+			}
+		}
+		verified = true;
+		break;
 	}
-aan_out:
+
+out:
 	a_ctrl->io_master_info.cci_client->sid = sid_backup;
-	aan_already_write = 1;
-	CAM_DBG(CAM_ACTUATOR, "aan, cam_actuator_anti_noise done");
-	return 0;
+	if (verified) {
+		aan_already_write = 1;
+		CAM_DBG(CAM_ACTUATOR, "aan, AK7374 anti-noise sequence verified");
+	} else if (rc < 0) {
+		CAM_ERR(CAM_ACTUATOR,
+			"aan, AK7374 anti-noise sequence failed; a later init may retry");
+	}
+	return rc;
 }
 /* ----------------------------------------------------
 * Anti-Actuator-Noise logic end
