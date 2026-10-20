@@ -1803,18 +1803,28 @@ static int cs35l41_dsp_init(struct cs35l41_private *cs35l41)
 	dsp->n_rx_rates = CS35L41_DSP_N_RX_RATES;
 	dsp->n_tx_rates = CS35L41_DSP_N_TX_RATES;
 	ret = wm_halo_init(dsp);
+	if (ret < 0)
+		return ret;
+
 	cs35l41->halo_booted = false;
 
-	regmap_write(cs35l41->regmap, CS35L41_DSP1_RX5_SRC,
-		     CS35L41_INPUT_SRC_VPMON);
-	regmap_write(cs35l41->regmap, CS35L41_DSP1_RX6_SRC,
-		     CS35L41_INPUT_SRC_CLASSH);
-	regmap_write(cs35l41->regmap, CS35L41_DSP1_RX7_SRC,
-		     CS35L41_INPUT_SRC_TEMPMON);
-	regmap_write(cs35l41->regmap, CS35L41_DSP1_RX8_SRC,
-		     CS35L41_INPUT_SRC_RSVD);
+	ret = regmap_write(cs35l41->regmap, CS35L41_DSP1_RX5_SRC,
+			   CS35L41_INPUT_SRC_VPMON);
+	if (ret < 0)
+		return ret;
 
-	return ret;
+	ret = regmap_write(cs35l41->regmap, CS35L41_DSP1_RX6_SRC,
+			   CS35L41_INPUT_SRC_CLASSH);
+	if (ret < 0)
+		return ret;
+
+	ret = regmap_write(cs35l41->regmap, CS35L41_DSP1_RX7_SRC,
+			   CS35L41_INPUT_SRC_TEMPMON);
+	if (ret < 0)
+		return ret;
+
+	return regmap_write(cs35l41->regmap, CS35L41_DSP1_RX8_SRC,
+			    CS35L41_INPUT_SRC_RSVD);
 }
 
 int cs35l41_probe(struct cs35l41_private *cs35l41,
@@ -1981,12 +1991,19 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 		goto err;
 	}
 
-	cs35l41_dsp_init(cs35l41);
+	ret = cs35l41_dsp_init(cs35l41);
+	if (ret < 0) {
+		dev_err(cs35l41->dev, "DSP initialization failed: %d\n", ret);
+		wm_adsp2_remove(&cs35l41->dsp);
+		goto err;
+	}
 
 	ret = snd_soc_register_component(cs35l41->dev, &soc_component_dev_cs35l41,
 				     cs35l41_dai, ARRAY_SIZE(cs35l41_dai));
 	if (ret < 0) {
-		dev_err(cs35l41->dev, "%s: Register codec failed\n", __func__);
+		dev_err(cs35l41->dev, "%s: Register component failed: %d\n",
+			__func__, ret);
+		wm_adsp2_remove(&cs35l41->dsp);
 		goto err;
 	}
 
