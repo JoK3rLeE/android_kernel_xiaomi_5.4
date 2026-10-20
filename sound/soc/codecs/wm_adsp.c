@@ -238,10 +238,6 @@
 #define HALO_SCRATCH3                        0x005d0
 #define HALO_SCRATCH4                        0x005d8
 #define HALO_CCM_CORE_CONTROL                0x41000
-#define HALO_SAMPLE_RATE_RX1                 0x00080
-#define HALO_SAMPLE_RATE_TX1                 0x00280
-#define HALO_DSP_RATE_SHIFT                  0
-#define HALO_DSP_RATE_MASK                   0x1f
 #define HALO_CORE_SOFT_RESET                 0x00010
 #define HALO_WDT_CONTROL                     0x47000
 
@@ -287,7 +283,6 @@
  * HALO_CCM_CORE_CONTROL
  */
 #define HALO_CORE_EN                        0x00000001
-#define HALO_CORE_RESET                     0x00000200
 
 /*
  * HALO_CORE_SOFT_RESET
@@ -361,10 +356,8 @@ static void wm_adsp_buf_free(struct list_head *list)
 #define WM_ADSP_FW_TRACE    8
 #define WM_ADSP_FW_SPK_PROT 9
 #define WM_ADSP_FW_MISC     10
-#define WM_ADSP_FW_DIAG     11
-#define WM_ADSP_FW_CALIB    12
 
-#define WM_ADSP_NUM_FW      13
+#define WM_ADSP_NUM_FW      11
 
 static const char *wm_adsp_fw_text[WM_ADSP_NUM_FW] = {
 	[WM_ADSP_FW_MBC_VSS] =  "MBC/VSS",
@@ -378,8 +371,6 @@ static const char *wm_adsp_fw_text[WM_ADSP_NUM_FW] = {
 	[WM_ADSP_FW_TRACE] =    "Dbg Trace",
 	[WM_ADSP_FW_SPK_PROT] = "Protection",
 	[WM_ADSP_FW_MISC] =     "Misc",
-	[WM_ADSP_FW_DIAG] =     "Diag",
-	[WM_ADSP_FW_CALIB] =    "Diag Z",
 };
 
 struct wm_adsp_system_config_xm_hdr {
@@ -596,8 +587,6 @@ static const struct {
 	},
 	[WM_ADSP_FW_SPK_PROT] = { .file = "spk-prot" },
 	[WM_ADSP_FW_MISC] =     { .file = "misc" },
-	[WM_ADSP_FW_DIAG] =     { .file = "diag" },
-	[WM_ADSP_FW_CALIB] =    { .file = "diag-z" },
 };
 
 struct wm_coeff_ctl_ops {
@@ -3123,33 +3112,6 @@ int wm_adsp_early_event(struct snd_soc_dapm_widget *w,
 }
 EXPORT_SYMBOL_GPL(wm_adsp_early_event);
 
-/*
- * Xiaomi's CS35L41 integration uses a separate HALO preloader widget. Keep
- * its reset sequence here, but reuse the 5.4 component-based WM ADSP lifecycle
- * so firmware loading, control synchronization and shutdown stay consistent.
- */
-int wm_halo_early_event(struct snd_soc_dapm_widget *w,
-			struct snd_kcontrol *kcontrol, int event)
-{
-	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
-	struct wm_adsp *dsps = snd_soc_component_get_drvdata(component);
-	struct wm_adsp *dsp = &dsps[w->shift];
-	int ret;
-
-	if (event == SND_SOC_DAPM_PRE_PMU) {
-		ret = regmap_update_bits(dsp->regmap,
-					 dsp->base + HALO_CCM_CORE_CONTROL,
-					 HALO_CORE_RESET, HALO_CORE_RESET);
-		if (ret) {
-			adsp_err(dsp, "Failed to reset HALO core: %d\n", ret);
-			return ret;
-		}
-	}
-
-	return wm_adsp_early_event(w, kcontrol, event);
-}
-EXPORT_SYMBOL_GPL(wm_halo_early_event);
-
 static int wm_adsp2_start_core(struct wm_adsp *dsp)
 {
 	return regmap_update_bits(dsp->regmap, dsp->base + ADSP2_CONTROL,
@@ -3264,190 +3226,6 @@ err:
 }
 EXPORT_SYMBOL_GPL(wm_adsp_event);
 
-/*
- * MiCode's CS35L41 driver writes speaker-protection calibration values into
- * the firmware controls before the DSP is started. The 5.4 WM ADSP core owns
- * the control cache, so update that cache here and let wm_adsp_event() perform
- * the normal synchronized write as part of power-up.
- */
-#define HALO_STREAM_ARB_MSTR0_CONFIG_0 0x45000
-#define HALO_STREAM_ARB_TX1_CONFIG_0   0x45200
-#define HALO_STREAM_ARB_RX8_CONFIG_0   0x45438
-#define HALO_STREAM_ARB_IRQ0_CONFIG_0  0x45600
-#define HALO_STREAM_ARB_IRQ7_CONFIG_1  0x45674
-#define HALO_STREAM_ARB_MSTR_EN_MASK   0x00000001
-#define HALO_STREAM_ARB_MSTR_SEL_DEFAULT 0x000000fc
-
-static int wm_halo_clear_stream_arb(struct wm_adsp *dsp)
-{
-	unsigned int reg;
-	u32 values[3] = { 0, 0, 0 };
-	int ret;
-
-	for (reg = dsp->base + HALO_STREAM_ARB_MSTR0_CONFIG_0;
-	     reg <= dsp->base + 0x45050; reg += 0x10) {
-		ret = regmap_update_bits(dsp->regmap, reg,
-					 HALO_STREAM_ARB_MSTR_EN_MASK, 0);
-		if (ret)
-			goto err;
-	}
-
-	for (reg = dsp->base + HALO_STREAM_ARB_MSTR0_CONFIG_0;
-	     reg <= dsp->base + 0x45050; reg += 0x10) {
-		ret = regmap_bulk_write(dsp->regmap, reg, values, 3);
-		if (ret)
-			goto err;
-	}
-
-	for (reg = dsp->base + HALO_STREAM_ARB_TX1_CONFIG_0;
-	     reg <= dsp->base + HALO_STREAM_ARB_RX8_CONFIG_0; reg += 0x8) {
-		ret = regmap_write(dsp->regmap, reg,
-				   HALO_STREAM_ARB_MSTR_SEL_DEFAULT);
-		if (ret)
-			goto err;
-	}
-
-	values[0] = HALO_STREAM_ARB_MSTR_SEL_DEFAULT;
-	for (reg = dsp->base + HALO_STREAM_ARB_IRQ0_CONFIG_0;
-	     reg <= dsp->base + HALO_STREAM_ARB_IRQ7_CONFIG_1; reg += 0x10) {
-		ret = regmap_bulk_write(dsp->regmap, reg, values, 2);
-		if (ret)
-			goto err;
-	}
-
-	return 0;
-err:
-	adsp_err(dsp, "Failed to clear HALO stream arbiter at 0x%x: %d\n",
-		 reg, ret);
-	return ret;
-}
-
-static int wm_halo_set_rate_block(struct wm_adsp *dsp,
-				     unsigned int rate_base,
-				     unsigned int n_rates,
-				     const u8 *rate_cache)
-{
-	unsigned int addr = dsp->base + rate_base;
-	int ret, i;
-
-	if (n_rates && !rate_cache)
-		return -EINVAL;
-
-	for (i = 0; i < n_rates; i++) {
-		ret = regmap_update_bits(dsp->regmap, addr + (i * 8),
-					 HALO_DSP_RATE_MASK,
-					 rate_cache[i] << HALO_DSP_RATE_SHIFT);
-		if (ret) {
-			adsp_err(dsp, "Failed to set HALO sample rate %d: %d\n",
-				 i, ret);
-			return ret;
-		}
-	}
-
-	return 0;
-}
-
-static void wm_halo_set_calibration_control(struct wm_adsp *dsp,
-					    const char *name, u32 value)
-{
-	struct wm_coeff_ctl *ctl;
-	__be32 be_value = cpu_to_be32(value);
-
-	list_for_each_entry(ctl, &dsp->ctl_list, list) {
-		if (strcmp(ctl->name, name))
-			continue;
-
-		if (!ctl->cache || ctl->len < sizeof(be_value)) {
-			adsp_warn(dsp, "Calibration control %s is too small\n",
-				  name);
-			return;
-		}
-
-		memcpy(ctl->cache, &be_value, sizeof(be_value));
-		ctl->set = 1;
-		return;
-	}
-
-	adsp_dbg(dsp, "Calibration control %s is not present in this firmware\n",
-		 name);
-}
-
-static void wm_halo_apply_calibration(struct wm_adsp *dsp)
-{
-	switch (dsp->fw) {
-	case WM_ADSP_FW_SPK_PROT:
-		wm_halo_set_calibration_control(dsp,
-						"DSP1X Protection cd CAL_R",
-						dsp->cal_z);
-		wm_halo_set_calibration_control(dsp,
-						"DSP1X Protection cd CAL_STATUS",
-						dsp->cal_status);
-		wm_halo_set_calibration_control(dsp,
-						"DSP1X Protection cd CAL_CHECKSUM",
-						dsp->cal_chksum);
-		break;
-	case WM_ADSP_FW_DIAG:
-		wm_halo_set_calibration_control(dsp,
-						"DSP1X Diag cd CAL_AMBIENT",
-						dsp->ambient);
-		break;
-	case WM_ADSP_FW_CALIB:
-		wm_halo_set_calibration_control(dsp,
-						"DSP1X Diag Z cd CAL_AMBIENT",
-						dsp->ambient);
-		break;
-	default:
-		break;
-	}
-}
-
-int wm_halo_event(struct snd_soc_dapm_widget *w,
-		  struct snd_kcontrol *kcontrol, int event)
-{
-	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
-	struct wm_adsp *dsps = snd_soc_component_get_drvdata(component);
-	struct wm_adsp *dsp = &dsps[w->shift];
-
-	int ret;
-
-	if (event == SND_SOC_DAPM_POST_PMU) {
-		flush_work(&dsp->boot_work);
-		mutex_lock(&dsp->pwr_lock);
-		if (!dsp->booted) {
-			mutex_unlock(&dsp->pwr_lock);
-			return -EIO;
-		}
-		wm_halo_apply_calibration(dsp);
-		mutex_unlock(&dsp->pwr_lock);
-
-		ret = wm_halo_set_rate_block(dsp, HALO_SAMPLE_RATE_RX1,
-					     dsp->n_rx_rates,
-					     dsp->rx_rate_cache);
-		if (ret)
-			return ret;
-
-		ret = wm_halo_set_rate_block(dsp, HALO_SAMPLE_RATE_TX1,
-					     dsp->n_tx_rates,
-					     dsp->tx_rate_cache);
-		if (ret)
-			return ret;
-
-		ret = wm_halo_clear_stream_arb(dsp);
-		if (ret)
-			return ret;
-	}
-
-	ret = wm_adsp_event(w, kcontrol, event);
-	if (ret)
-		return ret;
-
-	if (event == SND_SOC_DAPM_PRE_PMD)
-		return wm_halo_clear_stream_arb(dsp);
-
-	return 0;
-}
-EXPORT_SYMBOL_GPL(wm_halo_event);
-
 static int wm_halo_start_core(struct wm_adsp *dsp)
 {
 	return regmap_update_bits(dsp->regmap,
@@ -3536,27 +3314,6 @@ int wm_halo_init(struct wm_adsp *dsp)
 
 	dsp->ops = &wm_halo_ops;
 
-	if (dsp->n_rx_rates) {
-		dsp->rx_rate_cache = kcalloc(dsp->n_rx_rates,
-					     sizeof(*dsp->rx_rate_cache),
-					     GFP_KERNEL);
-		if (!dsp->rx_rate_cache)
-			return -ENOMEM;
-		memset(dsp->rx_rate_cache, 0x03, dsp->n_rx_rates);
-	}
-
-	if (dsp->n_tx_rates) {
-		dsp->tx_rate_cache = kcalloc(dsp->n_tx_rates,
-					     sizeof(*dsp->tx_rate_cache),
-					     GFP_KERNEL);
-		if (!dsp->tx_rate_cache) {
-			kfree(dsp->rx_rate_cache);
-			dsp->rx_rate_cache = NULL;
-			return -ENOMEM;
-		}
-		memset(dsp->tx_rate_cache, 0x03, dsp->n_tx_rates);
-	}
-
 	INIT_WORK(&dsp->boot_work, wm_adsp_boot_work);
 
 	return 0;
@@ -3573,11 +3330,6 @@ void wm_adsp2_remove(struct wm_adsp *dsp)
 		list_del(&ctl->list);
 		wm_adsp_free_ctl_blk(ctl);
 	}
-
-	kfree(dsp->rx_rate_cache);
-	dsp->rx_rate_cache = NULL;
-	kfree(dsp->tx_rate_cache);
-	dsp->tx_rate_cache = NULL;
 }
 EXPORT_SYMBOL_GPL(wm_adsp2_remove);
 
