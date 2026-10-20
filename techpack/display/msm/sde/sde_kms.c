@@ -1014,7 +1014,17 @@ static void _sde_kms_drm_check_dpms(struct drm_atomic_state *old_state,
 					legacy_mode = MSM_DRM_BLANK_POWERDOWN;
 					break;
 				case DRM_PANEL_BLANK_LP:
-					legacy_mode = MSM_DRM_BLANK_LP1;
+					/*
+					 * drm_panel has one LP event, but the legacy MSM
+					 * ABI distinguishes LP1 from LP2. Preserve the
+					 * connector's actual low-power mode for old clients.
+					 */
+					if (crtc->state->active &&
+						sde_connector_get_property(connector->state,
+							CONNECTOR_PROP_LP) == SDE_MODE_DPMS_LP2)
+						legacy_mode = MSM_DRM_BLANK_LP2;
+					else
+						legacy_mode = MSM_DRM_BLANK_LP1;
 					break;
 				default:
 					/* Ignore unsupported legacy blank states. */
