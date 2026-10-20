@@ -3270,8 +3270,8 @@ static void wm_halo_set_calibration_control(struct wm_adsp *dsp,
 		if (strcmp(ctl->name, name))
 			continue;
 
-		if (ctl->len < sizeof(be_value)) {
-			adsp_warn(dsp, "Calibration control %s is too small\\n",
+		if (!ctl->cache || ctl->len < sizeof(be_value)) {
+			adsp_warn(dsp, "Calibration control %s is too small\n",
 				  name);
 			return;
 		}
@@ -3281,7 +3281,7 @@ static void wm_halo_set_calibration_control(struct wm_adsp *dsp,
 		return;
 	}
 
-	adsp_dbg(dsp, "Calibration control %s is not present in this firmware\\n",
+	adsp_dbg(dsp, "Calibration control %s is not present in this firmware\n",
 		 name);
 }
 
