@@ -760,31 +760,36 @@ static int cs35l41_main_amp_event(struct snd_soc_dapm_widget *w,
 {
 	struct snd_soc_component *codec = snd_soc_dapm_to_component(w->dapm);
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(codec);
-	int ret = 0;
+	int ret = 0, tmp;
 
-	pr_debug("++++>CSPL: %s, event = %d.\n", __func__, event);
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
-		regmap_multi_reg_write_bypassed(cs35l41->regmap,
-						cs35l41_pup_patch,
-						ARRAY_SIZE(cs35l41_pup_patch));
+		ret = regmap_multi_reg_write_bypassed(cs35l41->regmap,
+						      cs35l41_pup_patch,
+						      ARRAY_SIZE(cs35l41_pup_patch));
+		if (ret)
+			return ret;
 
-		regmap_update_bits(cs35l41->regmap, CS35L41_PWR_CTRL1,
-				   CS35L41_GLOBAL_EN_MASK,
-				   1 << CS35L41_GLOBAL_EN_SHIFT);
+		ret = regmap_update_bits(cs35l41->regmap, CS35L41_PWR_CTRL1,
+					 CS35L41_GLOBAL_EN_MASK,
+					 1 << CS35L41_GLOBAL_EN_SHIFT);
+		if (ret)
+			goto rollback_power_up;
 
 		usleep_range(1000, 1100);
 
 		if (cs35l41->halo_booted) {
 			if (cs35l41->cspl_cmd == CSPL_MBOX_CMD_STOP_PRE_REINIT)
-				/* Send this command on power down event */
 				ret = cs35l41_set_csplmboxcmd(
 					cs35l41, CSPL_MBOX_CMD_RESUME);
 			else
 				ret = cs35l41_set_csplmboxcmd(
 					cs35l41, cs35l41->cspl_cmd);
 		}
+		if (ret)
+			goto rollback_power_up;
 		break;
+
 	case SND_SOC_DAPM_POST_PMD:
 		if (cs35l41->halo_booted) {
 			if (cs35l41->cspl_cmd == CSPL_MBOX_CMD_STOP_PRE_REINIT)
@@ -795,20 +800,33 @@ static int cs35l41_main_amp_event(struct snd_soc_dapm_widget *w,
 					cs35l41, CSPL_MBOX_CMD_PAUSE);
 		}
 
-		regmap_update_bits(cs35l41->regmap, CS35L41_PWR_CTRL1,
-				   CS35L41_GLOBAL_EN_MASK, 0);
+		tmp = regmap_update_bits(cs35l41->regmap, CS35L41_PWR_CTRL1,
+					 CS35L41_GLOBAL_EN_MASK, 0);
+		if (!ret)
+			ret = tmp;
 
 		usleep_range(1000, 1100);
 
-		regmap_multi_reg_write_bypassed(cs35l41->regmap,
-						cs35l41_pdn_patch,
-						ARRAY_SIZE(cs35l41_pdn_patch));
+		tmp = regmap_multi_reg_write_bypassed(cs35l41->regmap,
+						      cs35l41_pdn_patch,
+						      ARRAY_SIZE(cs35l41_pdn_patch));
+		if (!ret)
+			ret = tmp;
 		break;
+
 	default:
 		dev_err(codec->dev, "Invalid event = 0x%x\n", event);
-		ret = -EINVAL;
+		return -EINVAL;
 	}
-	pr_debug("----CSPL: %s.\n", __func__);
+
+	return ret;
+
+rollback_power_up:
+	regmap_update_bits(cs35l41->regmap, CS35L41_PWR_CTRL1,
+			   CS35L41_GLOBAL_EN_MASK, 0);
+	usleep_range(1000, 1100);
+	regmap_multi_reg_write_bypassed(cs35l41->regmap, cs35l41_pdn_patch,
+					ARRAY_SIZE(cs35l41_pdn_patch));
 	return ret;
 }
 
