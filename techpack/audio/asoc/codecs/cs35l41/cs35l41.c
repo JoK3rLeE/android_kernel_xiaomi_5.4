@@ -490,7 +490,7 @@ static int cs35l41_otp_unpack(void *data)
 	u32 otp_val, otp_id_reg;
 	const struct cs35l41_otp_map_element_t *otp_map_match;
 	const struct cs35l41_otp_packed_element_t *otp_map;
-	int ret;
+	int ret, lock_ret;
 	struct spi_device *spi = NULL;
 	u32 orig_spi_freq = 0;
 
@@ -561,12 +561,12 @@ static int cs35l41_otp_unpack(void *data)
 	ret = regmap_write(cs35l41->regmap, CS35L41_TEST_KEY_CTL, 0x00000055);
 	if (ret < 0) {
 		dev_err(cs35l41->dev, "Write Unlock key failed 1/2: %d\n", ret);
-		return ret;
+		goto lock_otp;
 	}
 	ret = regmap_write(cs35l41->regmap, CS35L41_TEST_KEY_CTL, 0x000000AA);
 	if (ret < 0) {
 		dev_err(cs35l41->dev, "Write Unlock key failed 2/2: %d\n", ret);
-		return ret;
+		goto lock_otp;
 	}
 
 	for (i = 0; i < otp_map_match->num_elements; i++) {
@@ -604,23 +604,37 @@ static int cs35l41_otp_unpack(void *data)
 				otp_val << otp_map[i].shift);
 			if (ret < 0) {
 				dev_err(cs35l41->dev, "Write OTP val failed: %d\n", ret);
-				return ret;
+				goto lock_otp;
 			}
 		}
 	}
 
-	ret = regmap_write(cs35l41->regmap, CS35L41_TEST_KEY_CTL, 0x000000CC);
-	if (ret < 0) {
-		dev_err(cs35l41->dev, "Write Lock key failed 1/2: %d\n", ret);
-		return ret;
-	}
-	ret = regmap_write(cs35l41->regmap, CS35L41_TEST_KEY_CTL, 0x00000033);
-	if (ret < 0) {
-		dev_err(cs35l41->dev, "Write Lock key failed 2/2: %d\n", ret);
-		return ret;
+	ret = 0;
+
+lock_otp:
+	/*
+	 * Always attempt to relock test registers after starting the unlock
+	 * sequence, including when a trim write fails partway through.
+	 */
+	lock_ret = regmap_write(cs35l41->regmap, CS35L41_TEST_KEY_CTL,
+				0x000000CC);
+	if (lock_ret < 0) {
+		dev_err(cs35l41->dev, "Write Lock key failed 1/2: %d\n",
+			lock_ret);
+		if (!ret)
+			ret = lock_ret;
 	}
 
-	return 0;
+	lock_ret = regmap_write(cs35l41->regmap, CS35L41_TEST_KEY_CTL,
+				0x00000033);
+	if (lock_ret < 0) {
+		dev_err(cs35l41->dev, "Write Lock key failed 2/2: %d\n",
+			lock_ret);
+		if (!ret)
+			ret = lock_ret;
+	}
+
+	return ret;
 }
 
 #define CS35L41_IRQ_REGMAP(_expr) do { \
