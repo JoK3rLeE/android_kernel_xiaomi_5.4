@@ -242,59 +242,74 @@ static bool cs35l41_is_csplmboxsts_correct(enum cs35l41_cspl_mboxcmd cmd,
 static int cs35l41_set_csplmboxcmd(struct cs35l41_private *cs35l41,
 				   enum cs35l41_cspl_mboxcmd cmd)
 {
-	int ret;
+	unsigned long waited;
 	unsigned int sts;
+	int ret, mask_ret;
 
-	/* Reset DSP sticky bit */
-	regmap_write(cs35l41->regmap, CS35L41_IRQ2_STATUS2,
-		     1 << CS35L41_CSPL_MBOX_CMD_DRV_SHIFT);
+	ret = regmap_write(cs35l41->regmap, CS35L41_IRQ2_STATUS2,
+			   1 << CS35L41_CSPL_MBOX_CMD_DRV_SHIFT);
+	if (ret)
+		return ret;
 
-	/* Reset AP sticky bit */
-	regmap_write(cs35l41->regmap, CS35L41_IRQ1_STATUS2,
-		     1 << CS35L41_CSPL_MBOX_CMD_FW_SHIFT);
+	ret = regmap_write(cs35l41->regmap, CS35L41_IRQ1_STATUS2,
+			   1 << CS35L41_CSPL_MBOX_CMD_FW_SHIFT);
+	if (ret)
+		return ret;
 
-	/*
-	 * Set mailbox cmd
-	 */
 	reinit_completion(&cs35l41->mbox_cmd);
-	/* Unmask DSP INT */
-	regmap_update_bits(cs35l41->regmap, CS35L41_IRQ2_MASK2,
-			   1 << CS35L41_CSPL_MBOX_CMD_DRV_SHIFT, 0);
-	/* Unmask AP INT */
-	regmap_update_bits(cs35l41->regmap, CS35L41_IRQ1_MASK2,
-			   1 << CS35L41_CSPL_MBOX_CMD_FW_SHIFT, 0);
-	regmap_write(cs35l41->regmap, CS35L41_CSPL_MBOX_CMD_DRV, cmd);
-	ret = wait_for_completion_timeout(&cs35l41->mbox_cmd,
-					  msecs_to_jiffies(CS35L41_MBOXWAIT));
-	if (ret == 0) {
-		dev_err(cs35l41->dev,
-			"Timout waiting for DSP to set mbox cmd\n");
+
+	ret = regmap_update_bits(cs35l41->regmap, CS35L41_IRQ2_MASK2,
+				 1 << CS35L41_CSPL_MBOX_CMD_DRV_SHIFT, 0);
+	if (ret)
+		goto mask_irqs;
+
+	ret = regmap_update_bits(cs35l41->regmap, CS35L41_IRQ1_MASK2,
+				 1 << CS35L41_CSPL_MBOX_CMD_FW_SHIFT, 0);
+	if (ret)
+		goto mask_irqs;
+
+	ret = regmap_write(cs35l41->regmap, CS35L41_CSPL_MBOX_CMD_DRV, cmd);
+	if (ret)
+		goto mask_irqs;
+
+	waited = wait_for_completion_timeout(&cs35l41->mbox_cmd,
+					     msecs_to_jiffies(CS35L41_MBOXWAIT));
+	if (!waited) {
+		dev_err(cs35l41->dev, "Timed out waiting for CSPL mailbox response\n");
 		ret = -ETIMEDOUT;
 	}
 
-	/* Mask AP INT */
-	regmap_update_bits(cs35l41->regmap, CS35L41_IRQ1_MASK2,
-			   1 << CS35L41_CSPL_MBOX_CMD_FW_SHIFT,
-			   1 << CS35L41_CSPL_MBOX_CMD_FW_SHIFT);
-	/* Mask DSP INT */
-	regmap_update_bits(cs35l41->regmap, CS35L41_IRQ2_MASK2,
-			   1 << CS35L41_CSPL_MBOX_CMD_DRV_SHIFT,
-			   1 << CS35L41_CSPL_MBOX_CMD_DRV_SHIFT);
+mask_irqs:
+	mask_ret = regmap_update_bits(cs35l41->regmap, CS35L41_IRQ1_MASK2,
+				     1 << CS35L41_CSPL_MBOX_CMD_FW_SHIFT,
+				     1 << CS35L41_CSPL_MBOX_CMD_FW_SHIFT);
+	if (!ret)
+		ret = mask_ret;
 
-	if (regmap_read(cs35l41->regmap, CS35L41_CSPL_MBOX_STS, &sts) < 0) {
-		dev_err(cs35l41->dev, "Failed to read %u\n",
-			CS35L41_CSPL_MBOX_STS);
-		ret = -EACCES;
+	mask_ret = regmap_update_bits(cs35l41->regmap, CS35L41_IRQ2_MASK2,
+				     1 << CS35L41_CSPL_MBOX_CMD_DRV_SHIFT,
+				     1 << CS35L41_CSPL_MBOX_CMD_DRV_SHIFT);
+	if (!ret)
+		ret = mask_ret;
+	if (ret)
+		return ret;
+
+	ret = regmap_read(cs35l41->regmap, CS35L41_CSPL_MBOX_STS, &sts);
+	if (ret) {
+		dev_err(cs35l41->dev, "Failed to read CSPL mailbox status: %d\n",
+			ret);
+		return ret;
 	}
 
 	if (!cs35l41_is_csplmboxsts_correct(cmd,
 					    (enum cs35l41_cspl_mboxstate)sts)) {
 		dev_err(cs35l41->dev,
-			"Failed to set mailbox(cmd: %u, sts: %u)\n", cmd, sts);
-		ret = -ENOMSG;
+			"Unexpected CSPL mailbox state (cmd: %u, status: %u)\n",
+			cmd, sts);
+		return -ENOMSG;
 	}
 
-	return ret;
+	return 0;
 }
 
 static int cs35l41_cspl_cmd_put(struct snd_kcontrol *kcontrol,
