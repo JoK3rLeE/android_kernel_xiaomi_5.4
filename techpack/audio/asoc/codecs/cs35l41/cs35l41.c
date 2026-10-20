@@ -496,8 +496,8 @@ static int cs35l41_otp_unpack(void *data)
 
 	ret = regmap_read(cs35l41->regmap, CS35L41_OTPID, &otp_id_reg);
 	if (ret < 0) {
-		dev_err(cs35l41->dev, "Read OTP ID failed\n");
-		return -EINVAL;
+		dev_err(cs35l41->dev, "Read OTP ID failed: %d\n", ret);
+		return ret;
 	}
 
 	otp_map_match = cs35l41_find_otp_map(otp_id_reg);
@@ -512,7 +512,16 @@ static int cs35l41_otp_unpack(void *data)
 		spi = to_spi_device(cs35l41->dev);
 		orig_spi_freq = spi->max_speed_hz;
 		spi->max_speed_hz = CS35L41_SPI_MAX_FREQ_OTP;
-		spi_setup(spi);
+		ret = spi_setup(spi);
+		if (ret) {
+			dev_err(cs35l41->dev,
+				"Failed to lower SPI speed for OTP read: %d\n", ret);
+			spi->max_speed_hz = orig_spi_freq;
+			if (spi_setup(spi))
+				dev_warn(cs35l41->dev,
+					 "Failed to restore SPI speed after OTP setup error\n");
+			return ret;
+		}
 	}
 
 #define MAX_BULK_READ_SIZE 4
@@ -526,7 +535,9 @@ static int cs35l41_otp_unpack(void *data)
 				"Read OTP Mem failed at block %d: %d\n", i, ret);
 			if (cs35l41->bus_spi) {
 				spi->max_speed_hz = orig_spi_freq;
-				spi_setup(spi);
+				if (spi_setup(spi))
+					dev_warn(cs35l41->dev,
+						 "Failed to restore SPI speed after OTP read error\n");
 			}
 			return ret;
 		}
@@ -534,7 +545,12 @@ static int cs35l41_otp_unpack(void *data)
 
 	if (cs35l41->bus_spi) {
 		spi->max_speed_hz = orig_spi_freq;
-		spi_setup(spi);
+		ret = spi_setup(spi);
+		if (ret) {
+			dev_err(cs35l41->dev,
+				"Failed to restore SPI speed after OTP read: %d\n", ret);
+			return ret;
+		}
 	}
 
 	otp_map = otp_map_match->map;
@@ -544,13 +560,13 @@ static int cs35l41_otp_unpack(void *data)
 
 	ret = regmap_write(cs35l41->regmap, CS35L41_TEST_KEY_CTL, 0x00000055);
 	if (ret < 0) {
-		dev_err(cs35l41->dev, "Write Unlock key failed 1/2\n");
-		return -EINVAL;
+		dev_err(cs35l41->dev, "Write Unlock key failed 1/2: %d\n", ret);
+		return ret;
 	}
 	ret = regmap_write(cs35l41->regmap, CS35L41_TEST_KEY_CTL, 0x000000AA);
 	if (ret < 0) {
-		dev_err(cs35l41->dev, "Write Unlock key failed 2/2\n");
-		return -EINVAL;
+		dev_err(cs35l41->dev, "Write Unlock key failed 2/2: %d\n", ret);
+		return ret;
 	}
 
 	for (i = 0; i < otp_map_match->num_elements; i++) {
@@ -587,21 +603,21 @@ static int cs35l41_otp_unpack(void *data)
 					otp_map[i].shift),
 				otp_val << otp_map[i].shift);
 			if (ret < 0) {
-				dev_err(cs35l41->dev, "Write OTP val failed\n");
-				return -EINVAL;
+				dev_err(cs35l41->dev, "Write OTP val failed: %d\n", ret);
+				return ret;
 			}
 		}
 	}
 
 	ret = regmap_write(cs35l41->regmap, CS35L41_TEST_KEY_CTL, 0x000000CC);
 	if (ret < 0) {
-		dev_err(cs35l41->dev, "Write Lock key failed 1/2\n");
-		return -EINVAL;
+		dev_err(cs35l41->dev, "Write Lock key failed 1/2: %d\n", ret);
+		return ret;
 	}
 	ret = regmap_write(cs35l41->regmap, CS35L41_TEST_KEY_CTL, 0x00000033);
 	if (ret < 0) {
-		dev_err(cs35l41->dev, "Write Lock key failed 2/2\n");
-		return -EINVAL;
+		dev_err(cs35l41->dev, "Write Lock key failed 2/2: %d\n", ret);
+		return ret;
 	}
 
 	return 0;
