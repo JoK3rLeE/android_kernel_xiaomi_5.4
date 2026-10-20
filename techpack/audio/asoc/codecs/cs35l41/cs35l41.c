@@ -1752,6 +1752,11 @@ static const struct snd_soc_component_driver soc_component_dev_cs35l41 = {
 	.use_pmdown_time = 1,
 };
 
+static void cs35l41_put_of_node(void *data)
+{
+	of_node_put(data);
+}
+
 static int cs35l41_handle_of_data(struct device *dev,
 				  struct cs35l41_platform_data *pdata)
 {
@@ -1812,13 +1817,17 @@ static int cs35l41_handle_of_data(struct device *dev,
 
 	pdata->spk_id_gpio_p = of_parse_phandle(np, "cirrus,spk-id-pin", 0);
 	if (!pdata->spk_id_gpio_p) {
-		dev_err(dev, "property %s not detected in node %s",
+		dev_dbg(dev, "Optional %s property not present in %s\n",
 			"cirrus,spk-id-pin", np->full_name);
 		pdata->mnSpkType = VENDOR_ID_NONE;
 	} else {
+		ret = devm_add_action_or_reset(dev, cs35l41_put_of_node,
+					       pdata->spk_id_gpio_p);
+		if (ret)
+			return ret;
 		pdata->mnSpkType = spk_id_get(pdata->spk_id_gpio_p);
 	}
-	dev_info(dev, "spk is is %d", pdata->mnSpkType);
+	dev_dbg(dev, "Speaker type: %d\n", pdata->mnSpkType);
 
 	sub_node = of_get_child_by_name(np, "cirrus,classh-internal-algo");
 	classh_config->classh_algo_enable = sub_node ? true : false;
