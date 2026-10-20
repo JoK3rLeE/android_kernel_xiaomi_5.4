@@ -1165,13 +1165,13 @@ static int cs35l41_pcm_hw_params(struct snd_pcm_substream *substream,
 				 struct snd_pcm_hw_params *params,
 				 struct snd_soc_dai *dai)
 {
-	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(dai->component);
-	int i;
+	struct cs35l41_private *cs35l41 =
+		snd_soc_component_get_drvdata(dai->component);
 	unsigned int rate = params_rate(params);
 	unsigned int rate_cfg;
-	u8 asp_width, asp_wl;
+	unsigned int asp_width, asp_wl;
+	int i, ret;
 
-	pr_debug("++++>CSPL: %s.\n", __func__);
 	for (i = 0; i < ARRAY_SIZE(cs35l41_fs_rates); i++) {
 		if (rate == cs35l41_fs_rates[i].rate)
 			break;
@@ -1181,19 +1181,64 @@ static int cs35l41_pcm_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 	rate_cfg = cs35l41_fs_rates[i].fs_cfg;
-	{
-		int ret = regmap_update_bits(cs35l41->regmap,
-					     CS35L41_GLOBAL_CLK_CTRL,
-					     CS35L41_GLOBAL_FS_MASK,
-					     rate_cfg << CS35L41_GLOBAL_FS_SHIFT);
+
+	ret = regmap_update_bits(cs35l41->regmap, CS35L41_GLOBAL_CLK_CTRL,
+				 CS35L41_GLOBAL_FS_MASK,
+				 rate_cfg << CS35L41_GLOBAL_FS_SHIFT);
+	if (ret)
+		return ret;
+
+	asp_wl = params_width(params);
+	asp_width = params_physical_width(params);
+
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		ret = regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
+					 CS35L41_ASP_WIDTH_RX_MASK,
+					 asp_width << CS35L41_ASP_WIDTH_RX_SHIFT);
+		if (ret)
+			return ret;
+
+		ret = regmap_update_bits(cs35l41->regmap, CS35L41_SP_RX_WL,
+					 CS35L41_ASP_RX_WL_MASK,
+					 asp_wl << CS35L41_ASP_RX_WL_SHIFT);
+		if (ret)
+			return ret;
+
+		if (cs35l41->i2s_mode || cs35l41->dspa_mode) {
+			ret = regmap_update_bits(cs35l41->regmap,
+						 CS35L41_SP_FRAME_RX_SLOT,
+						 CS35L41_ASP_RX1_SLOT_MASK,
+						 (cs35l41->pdata.right_channel ? 1 : 0)
+						 << CS35L41_ASP_RX1_SLOT_SHIFT);
+			if (ret)
+				return ret;
+
+			ret = regmap_update_bits(cs35l41->regmap,
+						 CS35L41_SP_FRAME_RX_SLOT,
+						 CS35L41_ASP_RX2_SLOT_MASK,
+						 (cs35l41->pdata.right_channel ? 0 : 1)
+						 << CS35L41_ASP_RX2_SLOT_SHIFT);
+			if (ret)
+				return ret;
+		}
+	} else {
+		ret = regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
+					 CS35L41_ASP_WIDTH_TX_MASK,
+					 asp_width << CS35L41_ASP_WIDTH_TX_SHIFT);
+		if (ret)
+			return ret;
+
+		ret = regmap_update_bits(cs35l41->regmap, CS35L41_SP_TX_WL,
+					 CS35L41_ASP_TX_WL_MASK,
+					 asp_wl << CS35L41_ASP_TX_WL_SHIFT);
 		if (ret)
 			return ret;
 	}
 
 	/*
-	 * HALO sample-rate slots use the same rate encoding as GLOBAL_FS.
-	 * Cache the selected rate for every active direction; wm_halo_event()
-	 * commits these values before enabling the DSP core.
+	 * The HALO rate fields use the GLOBAL_FS encoding. Cache the selected
+	 * rate for every slot in the active direction; the HALO event commits
+	 * the cache before the DSP core is enabled.
 	 */
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		if (cs35l41->dsp.n_rx_rates && !cs35l41->dsp.rx_rate_cache)
@@ -1207,38 +1252,6 @@ static int cs35l41_pcm_hw_params(struct snd_pcm_substream *substream,
 			cs35l41->dsp.tx_rate_cache[i] = rate_cfg;
 	}
 
-	asp_wl = params_width(params);
-	asp_width = params_physical_width(params);
-
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
-				   CS35L41_ASP_WIDTH_RX_MASK,
-				   asp_width << CS35L41_ASP_WIDTH_RX_SHIFT);
-		regmap_update_bits(cs35l41->regmap, CS35L41_SP_RX_WL,
-				   CS35L41_ASP_RX_WL_MASK,
-				   asp_wl << CS35L41_ASP_RX_WL_SHIFT);
-		if (cs35l41->i2s_mode || cs35l41->dspa_mode) {
-			regmap_update_bits(
-				cs35l41->regmap, CS35L41_SP_FRAME_RX_SLOT,
-				CS35L41_ASP_RX1_SLOT_MASK,
-				((cs35l41->pdata.right_channel) ? 1 : 0)
-					<< CS35L41_ASP_RX1_SLOT_SHIFT);
-			regmap_update_bits(
-				cs35l41->regmap, CS35L41_SP_FRAME_RX_SLOT,
-				CS35L41_ASP_RX2_SLOT_MASK,
-				((cs35l41->pdata.right_channel) ? 0 : 1)
-					<< CS35L41_ASP_RX2_SLOT_SHIFT);
-		}
-	} else {
-		regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
-				   CS35L41_ASP_WIDTH_TX_MASK,
-				   asp_width << CS35L41_ASP_WIDTH_TX_SHIFT);
-		regmap_update_bits(cs35l41->regmap, CS35L41_SP_TX_WL,
-				   CS35L41_ASP_TX_WL_MASK,
-				   asp_wl << CS35L41_ASP_TX_WL_SHIFT);
-	}
-
-	pr_debug("---->CSPL: %s.\n", __func__);
 	return 0;
 }
 
