@@ -475,7 +475,7 @@ static void aan_i2c_write(struct camera_io_master *io_master_info, struct i2c_se
 	i2c_list->i2c_settings.reg_setting[0].reg_data = data;
 	i2c_list->i2c_settings.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
 	i2c_list->i2c_settings.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
-	i2c_list->op_code == CAM_SENSOR_I2C_WRITE_RANDOM;
+	i2c_list->op_code = CAM_SENSOR_I2C_WRITE_RANDOM;
 	i2c_list->i2c_settings.size = 1;
 
 	rc = camera_io_dev_write(io_master_info, &(i2c_list->i2c_settings));
