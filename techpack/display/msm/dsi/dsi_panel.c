@@ -5276,6 +5276,13 @@ int dsi_panel_disable(struct dsi_panel *panel)
 	}
 	panel->panel_initialized = false;
 	panel->power_mode = SDE_MODE_DPMS_OFF;
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+	/* FOD HBM is transient; don't leave exposure adjustment suspended. */
+	if (panel->resend_ea) {
+		ea_panel_mode_ctrl(panel, true);
+		panel->resend_ea = false;
+	}
+#endif
 
 	mutex_unlock(&panel->panel_lock);
 	return rc;
