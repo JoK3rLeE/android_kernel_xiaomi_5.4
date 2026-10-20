@@ -1603,37 +1603,60 @@ static int cs35l41_irq_gpio_config(struct cs35l41_private *cs35l41)
 	struct irq_cfg *irq_gpio_cfg1 = &cs35l41->pdata.irq_config1;
 	struct irq_cfg *irq_gpio_cfg2 = &cs35l41->pdata.irq_config2;
 	int irq_pol = IRQF_TRIGGER_NONE;
+	int ret;
 
 	if (irq_gpio_cfg1->is_present) {
-		if (irq_gpio_cfg1->irq_pol_inv)
-			regmap_update_bits(cs35l41->regmap, CS35L41_GPIO1_CTRL1,
-					   CS35L41_GPIO_POL_MASK,
-					   CS35L41_GPIO_POL_MASK);
-		if (irq_gpio_cfg1->irq_out_en)
-			regmap_update_bits(cs35l41->regmap, CS35L41_GPIO1_CTRL1,
-					   CS35L41_GPIO_DIR_MASK, 0);
-		if (irq_gpio_cfg1->irq_src_sel)
-			regmap_update_bits(cs35l41->regmap,
-					   CS35L41_GPIO_PAD_CONTROL,
-					   CS35L41_GPIO1_CTRL_MASK,
-					   irq_gpio_cfg1->irq_src_sel
-						   << CS35L41_GPIO1_CTRL_SHIFT);
+		if (irq_gpio_cfg1->irq_pol_inv) {
+			ret = regmap_update_bits(cs35l41->regmap,
+						 CS35L41_GPIO1_CTRL1,
+						 CS35L41_GPIO_POL_MASK,
+						 CS35L41_GPIO_POL_MASK);
+			if (ret)
+				return ret;
+		}
+		if (irq_gpio_cfg1->irq_out_en) {
+			ret = regmap_update_bits(cs35l41->regmap,
+						 CS35L41_GPIO1_CTRL1,
+						 CS35L41_GPIO_DIR_MASK, 0);
+			if (ret)
+				return ret;
+		}
+		if (irq_gpio_cfg1->irq_src_sel) {
+			ret = regmap_update_bits(cs35l41->regmap,
+						 CS35L41_GPIO_PAD_CONTROL,
+						 CS35L41_GPIO1_CTRL_MASK,
+						 irq_gpio_cfg1->irq_src_sel
+						 << CS35L41_GPIO1_CTRL_SHIFT);
+			if (ret)
+				return ret;
+		}
 	}
 
 	if (irq_gpio_cfg2->is_present) {
-		if (irq_gpio_cfg2->irq_pol_inv)
-			regmap_update_bits(cs35l41->regmap, CS35L41_GPIO2_CTRL1,
-					   CS35L41_GPIO_POL_MASK,
-					   CS35L41_GPIO_POL_MASK);
-		if (irq_gpio_cfg2->irq_out_en)
-			regmap_update_bits(cs35l41->regmap, CS35L41_GPIO2_CTRL1,
-					   CS35L41_GPIO_DIR_MASK, 0);
-		if (irq_gpio_cfg2->irq_src_sel)
-			regmap_update_bits(cs35l41->regmap,
-					   CS35L41_GPIO_PAD_CONTROL,
-					   CS35L41_GPIO2_CTRL_MASK,
-					   irq_gpio_cfg2->irq_src_sel
-						   << CS35L41_GPIO2_CTRL_SHIFT);
+		if (irq_gpio_cfg2->irq_pol_inv) {
+			ret = regmap_update_bits(cs35l41->regmap,
+						 CS35L41_GPIO2_CTRL1,
+						 CS35L41_GPIO_POL_MASK,
+						 CS35L41_GPIO_POL_MASK);
+			if (ret)
+				return ret;
+		}
+		if (irq_gpio_cfg2->irq_out_en) {
+			ret = regmap_update_bits(cs35l41->regmap,
+						 CS35L41_GPIO2_CTRL1,
+						 CS35L41_GPIO_DIR_MASK, 0);
+			if (ret)
+				return ret;
+		}
+		if (irq_gpio_cfg2->irq_src_sel) {
+			ret = regmap_update_bits(cs35l41->regmap,
+						 CS35L41_GPIO_PAD_CONTROL,
+						 CS35L41_GPIO2_CTRL_MASK,
+						 irq_gpio_cfg2->irq_src_sel
+						 << CS35L41_GPIO2_CTRL_SHIFT);
+			if (ret)
+				return ret;
+		}
 	}
 
 	if (irq_gpio_cfg2->irq_src_sel ==
@@ -2053,6 +2076,10 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 	}
 
 	irq_pol = cs35l41_irq_gpio_config(cs35l41);
+	if (irq_pol < 0) {
+		ret = irq_pol;
+		goto err;
+	}
 
 	init_completion(&cs35l41->global_pdn_done);
 	init_completion(&cs35l41->global_pup_done);
