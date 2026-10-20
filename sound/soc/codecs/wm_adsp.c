@@ -3266,6 +3266,58 @@ EXPORT_SYMBOL_GPL(wm_adsp_event);
  * the control cache, so update that cache here and let wm_adsp_event() perform
  * the normal synchronized write as part of power-up.
  */
+#define HALO_STREAM_ARB_MSTR0_CONFIG_0 0x45000
+#define HALO_STREAM_ARB_TX1_CONFIG_0   0x45200
+#define HALO_STREAM_ARB_RX8_CONFIG_0   0x45438
+#define HALO_STREAM_ARB_IRQ0_CONFIG_0  0x45600
+#define HALO_STREAM_ARB_IRQ7_CONFIG_1  0x45674
+#define HALO_STREAM_ARB_MSTR_EN_MASK   0x00000001
+#define HALO_STREAM_ARB_MSTR_SEL_DEFAULT 0x000000fc
+
+static int wm_halo_clear_stream_arb(struct wm_adsp *dsp)
+{
+	unsigned int reg;
+	u32 values[3] = { 0, 0, 0 };
+	int ret;
+
+	for (reg = dsp->base + HALO_STREAM_ARB_MSTR0_CONFIG_0;
+	     reg <= dsp->base + 0x45050; reg += 0x10) {
+		ret = regmap_update_bits(dsp->regmap, reg,
+					 HALO_STREAM_ARB_MSTR_EN_MASK, 0);
+		if (ret)
+			goto err;
+	}
+
+	for (reg = dsp->base + HALO_STREAM_ARB_MSTR0_CONFIG_0;
+	     reg <= dsp->base + 0x45050; reg += 0x10) {
+		ret = regmap_bulk_write(dsp->regmap, reg, values, 3);
+		if (ret)
+			goto err;
+	}
+
+	for (reg = dsp->base + HALO_STREAM_ARB_TX1_CONFIG_0;
+	     reg <= dsp->base + HALO_STREAM_ARB_RX8_CONFIG_0; reg += 0x8) {
+		ret = regmap_write(dsp->regmap, reg,
+				   HALO_STREAM_ARB_MSTR_SEL_DEFAULT);
+		if (ret)
+			goto err;
+	}
+
+	values[0] = HALO_STREAM_ARB_MSTR_SEL_DEFAULT;
+	for (reg = dsp->base + HALO_STREAM_ARB_IRQ0_CONFIG_0;
+	     reg <= dsp->base + HALO_STREAM_ARB_IRQ7_CONFIG_1; reg += 0x10) {
+		ret = regmap_bulk_write(dsp->regmap, reg, values, 2);
+		if (ret)
+			goto err;
+	}
+
+	return 0;
+err:
+	adsp_err(dsp, "Failed to clear HALO stream arbiter at 0x%x: %d\n",
+		 reg, ret);
+	return ret;
+}
+
 static void wm_halo_set_calibration_control(struct wm_adsp *dsp,
 					    const char *name, u32 value)
 {
@@ -3327,6 +3379,8 @@ int wm_halo_event(struct snd_soc_dapm_widget *w,
 	struct wm_adsp *dsps = snd_soc_component_get_drvdata(component);
 	struct wm_adsp *dsp = &dsps[w->shift];
 
+	int ret;
+
 	if (event == SND_SOC_DAPM_POST_PMU) {
 		flush_work(&dsp->boot_work);
 		mutex_lock(&dsp->pwr_lock);
@@ -3336,9 +3390,20 @@ int wm_halo_event(struct snd_soc_dapm_widget *w,
 		}
 		wm_halo_apply_calibration(dsp);
 		mutex_unlock(&dsp->pwr_lock);
+
+		ret = wm_halo_clear_stream_arb(dsp);
+		if (ret)
+			return ret;
 	}
 
-	return wm_adsp_event(w, kcontrol, event);
+	ret = wm_adsp_event(w, kcontrol, event);
+	if (ret)
+		return ret;
+
+	if (event == SND_SOC_DAPM_PRE_PMD)
+		return wm_halo_clear_stream_arb(dsp);
+
+	return 0;
 }
 EXPORT_SYMBOL_GPL(wm_halo_event);
 
