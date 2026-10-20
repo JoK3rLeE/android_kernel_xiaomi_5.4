@@ -2023,13 +2023,17 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 	}
 
 	if (gpio_is_valid(cs35l41->reset_gpio)) {
-		ret = gpio_direction_output(cs35l41->reset_gpio, 0);
+		/* Allow the supplies to settle before asserting reset. */
+		usleep_range(2000, 2100);
+		ret = devm_gpio_request_one(cs35l41->dev, cs35l41->reset_gpio,
+					    GPIOF_OUT_INIT_LOW,
+					    "cs35l41-reset");
 		if (ret) {
-			dev_err(cs35l41->dev, "Failed to assert reset GPIO %d: %d\n",
+			dev_err(cs35l41->dev, "Failed to request reset GPIO %d: %d\n",
 				cs35l41->reset_gpio, ret);
 			goto err;
 		}
-		usleep_range(5000, 5100);
+		msleep(5);
 
 		ret = gpio_direction_output(cs35l41->reset_gpio, 1);
 		if (ret) {
