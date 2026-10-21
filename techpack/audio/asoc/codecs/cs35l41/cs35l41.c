@@ -43,7 +43,6 @@
 #include <linux/err.h>
 #include <linux/mfd/spk-id.h>
 
-#include "wm_adsp.h"
 
 #include "cs35l41.h"
 #include <sound/cs35l41.h>
@@ -238,7 +237,7 @@ static int cs35l41_dsp_fw_put(struct snd_kcontrol *kcontrol,
 	mutex_lock(&dsp->pwr_lock);
 	if (dsp->fw == fw) {
 		ret = 0;
-	} else if (dsp->booted || dsp->running || dsp->compr) {
+	} else if (dsp->booted || dsp->running || !list_empty(&dsp->compr_list)) {
 		ret = -EBUSY;
 	} else {
 		dsp->fw = fw;
