@@ -322,9 +322,8 @@ obj-$(CONFIG_SND_SWR_HAPTICS) += swr_haptics_dlkm.o
 swr_haptics_dlkm-y := $(SWR_HAP_OBJS)
 
 
-# CS35L41 amplifier; bundle the vendor WM ADSP implementation adapted to ASoC components.
+# CS35L41 amplifier; its DSP core extends the shared component-based WM ADSP.
 obj-$(CONFIG_SND_SOC_CS35L41) += cs35l41_dlkm.o
 cs35l41_dlkm-y := cs35l41/cs35l41.o \
 		cs35l41/cs35l41-i2c.o \
-		cs35l41/cs35l41-tables.o \
-		cs35l41/wm_adsp.o
+		cs35l41/cs35l41-tables.o
