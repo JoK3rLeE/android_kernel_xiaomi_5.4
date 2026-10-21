@@ -2421,6 +2421,11 @@ static int wm_halo_create_regions(struct wm_adsp *dsp, __be32 id,
 static int wm_halo_setup_algs(struct wm_adsp *dsp)
 {
 	struct wmfw_halo_id_hdr halo_id;
+
+	/* Cepheus firmware revisions 1 and 2 use the legacy ADSP2 ID header. */
+	if (dsp->part && !strcmp(dsp->part, "cs35l41") &&
+	    (dsp->fw_ver == 1 || dsp->fw_ver == 2))
+		return wm_adsp2_setup_algs(dsp);
 	struct wmfw_halo_alg_hdr *halo_alg;
 	const struct wm_adsp_region *mem;
 	unsigned int pos, len;
