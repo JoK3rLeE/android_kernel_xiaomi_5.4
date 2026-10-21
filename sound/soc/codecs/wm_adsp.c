@@ -3472,6 +3472,7 @@ static int wm_adsp_halo_apply_calibration(struct wm_adsp *dsp)
 int wm_adsp_halo_early_event(struct wm_adsp *dsp, int event)
 {
 	struct wm_coeff_ctl *ctl;
+	int ret;
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
