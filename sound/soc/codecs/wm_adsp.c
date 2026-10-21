@@ -1812,6 +1812,10 @@ static bool wm_adsp_validate_version(struct wm_adsp *dsp, unsigned int version)
 static bool wm_halo_validate_version(struct wm_adsp *dsp, unsigned int version)
 {
 	switch (version) {
+	case 1:
+	case 2:
+		/* Cepheus CS35L41 firmware may use the legacy ADSP2 container. */
+		return dsp->part && !strcmp(dsp->part, "cs35l41");
 	case 3:
 		return true;
 	default:
