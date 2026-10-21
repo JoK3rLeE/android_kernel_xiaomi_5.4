@@ -3697,6 +3697,8 @@ start_error:
 	mutex_unlock(&dsp->pwr_lock);
 	regmap_update_bits(dsp->regmap, dsp->base + HALO_CCM_CORE_CONTROL,
 			   HALO_CORE_EN, 0);
+	/* Do not leave a failed boot marked as loaded for the next attempt. */
+	wm_adsp_halo_early_event(dsp, SND_SOC_DAPM_PRE_PMD);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(wm_adsp_halo_event);
