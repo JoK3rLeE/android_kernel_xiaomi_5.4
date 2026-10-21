@@ -176,14 +176,29 @@ static int cs35l41_halo_booted_put(struct snd_kcontrol *kcontrol,
 }
 
 
-/* Cepheus exposes the vendor DSP calibration and firmware-selection controls. */
+/* Keep the CS35L41 mixer ABI in the order used by Xiaomi's 4.14 audio stack. */
+static const char * const cs35l41_dsp_fw_text[] = {
+	"MBC/VSS", "MasterHiFi", "Tx", "Tx Speaker", "Rx", "Rx ANC",
+	"Voice Ctrl", "ASR Assist", "Dbg Trace", "Protection", "Diag", "Diag Z",
+};
+static const struct soc_enum cs35l41_dsp_fw_enum =
+	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(cs35l41_dsp_fw_text), cs35l41_dsp_fw_text);
+
 static int cs35l41_dsp_fw_get(struct snd_kcontrol *kcontrol,
 			      struct snd_ctl_elem_value *ucontrol)
 {
 	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component);
+	unsigned int fw = cs35l41->dsp.fw;
 
-	ucontrol->value.enumerated.item[0] = cs35l41->dsp.fw;
+	if (fw == WM_ADSP_FW_DIAG)
+		ucontrol->value.enumerated.item[0] = 10;
+	else if (fw == WM_ADSP_FW_CALIB)
+		ucontrol->value.enumerated.item[0] = 11;
+	else if (fw <= WM_ADSP_FW_SPK_PROT)
+		ucontrol->value.enumerated.item[0] = fw;
+	else
+		ucontrol->value.enumerated.item[0] = WM_ADSP_FW_SPK_PROT;
 	return 0;
 }
 
@@ -193,11 +208,16 @@ static int cs35l41_dsp_fw_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component);
 	struct wm_adsp *dsp = &cs35l41->dsp;
-	unsigned int fw = ucontrol->value.enumerated.item[0];
+	unsigned int item = ucontrol->value.enumerated.item[0];
+	unsigned int fw;
 	int ret = 0;
 
-	if (fw >= WM_ADSP_NUM_FW)
+	if (item >= ARRAY_SIZE(cs35l41_dsp_fw_text))
 		return -EINVAL;
+	/* MISC occupies index 10 in the generic ADSP table but is not a
+	 * selectable CS35L41 firmware in Xiaomi's userspace ABI.
+	 */
+	fw = item >= 10 ? item + 1 : item;
 	mutex_lock(&dsp->pwr_lock);
 	if (dsp->running) {
 		ret = -EBUSY;
@@ -329,7 +349,7 @@ static int cs35l41_block_bypass_in_enh_put(struct snd_kcontrol *kcontrol,
 }
 
 static const struct snd_kcontrol_new cs35l41_dsp_controls[] = {
-	SOC_ENUM_EXT("DSP1 Firmware", wm_adsp_fw_enum[0],
+	SOC_ENUM_EXT("DSP1 Firmware", cs35l41_dsp_fw_enum,
 		     cs35l41_dsp_fw_get, cs35l41_dsp_fw_put),
 	SOC_SINGLE_EXT("DSP Set CAL_Z", SND_SOC_NOPM, 0, 0xFFFFFF, 0,
 		       cs35l41_cal_z_get, cs35l41_cal_z_put),
