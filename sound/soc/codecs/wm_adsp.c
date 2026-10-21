@@ -3655,9 +3655,15 @@ int wm_adsp_halo_event(struct wm_adsp *dsp,
 				   dsp->base + HALO_INTP_CTL_NMI_CONTROL, 0);
 		if (ret)
 			goto start_error;
-		ret = wm_halo_configure_mpu_cs35l41(dsp);
-		if (ret)
-			goto start_error;
+		/*
+		 * The SRAM/MPU policy below is specific to the CS35L41 register
+		 * map. Keep generic HALO users on their own platform policy.
+		 */
+		if (dsp->part && !strcmp(dsp->part, "cs35l41")) {
+			ret = wm_halo_configure_mpu_cs35l41(dsp);
+			if (ret)
+				goto start_error;
+		}
 		if (dsp->ops->start_core) {
 			ret = dsp->ops->start_core(dsp);
 			if (ret)
