@@ -3421,6 +3421,36 @@ static int wm_adsp_halo_apply_calibration(struct wm_adsp *dsp)
 			wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_STATUS");
 			wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_CHECKSUM");
 		}
+
+		/*
+		 * Restore bypass state after a firmware reload. The separate
+		 * BYPASS_IN_ENH control overrides the group switch only when the
+		 * user has explicitly changed it.
+		 */
+		{
+			int bypass = dsp->block_bypass ? 0x00400001 : 0;
+			int enh_bypass = (dsp->block_bypass_in_enh_set ?
+				dsp->block_bypass_in_enh : dsp->block_bypass) ?
+				0x00400001 : 0;
+			int r;
+
+			r = wm_adsp_k_ctl_put(dsp,
+				"DSP1X Protection cd BYPASS_IN_ENH", enh_bypass);
+			if (r < 0 && r != -ENOENT)
+				ret = r;
+			r = wm_adsp_k_ctl_put(dsp,
+				"DSP1X Protection cd BYPASS_EQ", bypass);
+			if (r < 0 && r != -ENOENT && !ret)
+				ret = r;
+			r = wm_adsp_k_ctl_put(dsp,
+				"DSP1X Protection cd BYPASS_ACTI", bypass);
+			if (r < 0 && r != -ENOENT && !ret)
+				ret = r;
+			r = wm_adsp_k_ctl_put(dsp,
+				"DSP1X Protection cd BYPASS_MBL", bypass);
+			if (r < 0 && r != -ENOENT && !ret)
+				ret = r;
+		}
 		break;
 	default:
 		break;
