@@ -119,10 +119,10 @@ static int cs35l41_dsp_power_ev(struct snd_soc_dapm_widget *w,
 			 * before queueing the next boot.
 			 */
 			if (cs35l41->dsp.booted) {
-				wm_adsp_halo_event(&cs35l41->dsp, NULL, NULL,
-						   SND_SOC_DAPM_PRE_PMD);
 				wm_adsp_halo_early_event(&cs35l41->dsp,
 							 SND_SOC_DAPM_PRE_PMD);
+				wm_adsp_halo_event(&cs35l41->dsp, NULL, NULL,
+						   SND_SOC_DAPM_PRE_PMD);
 			}
 			ret = wm_adsp_halo_early_event(&cs35l41->dsp, event);
 		} else {
