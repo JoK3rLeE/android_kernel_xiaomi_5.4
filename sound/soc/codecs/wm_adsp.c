@@ -3394,33 +3394,38 @@ EXPORT_SYMBOL_GPL(wm_adsp_k_ctl_get);
 
 static int wm_adsp_halo_apply_calibration(struct wm_adsp *dsp)
 {
-	int ret = 0;
+	int ret = 0, r;
 
 	switch (dsp->fw) {
 	case WM_ADSP_FW_CALIB:
-		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Diag Z cd CAL_AMBIENT",
-					dsp->ambient);
+		r = wm_adsp_k_ctl_put(dsp, "DSP1X Diag Z cd CAL_AMBIENT",
+				      dsp->ambient);
+		if (r < 0 && r != -ENOENT)
+			ret = r;
 		break;
 	case WM_ADSP_FW_DIAG:
-		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Diag cd CAL_AMBIENT",
-					dsp->ambient);
+		r = wm_adsp_k_ctl_put(dsp, "DSP1X Diag cd CAL_AMBIENT",
+				      dsp->ambient);
+		if (r < 0 && r != -ENOENT)
+			ret = r;
 		break;
 	case WM_ADSP_FW_SPK_PROT:
-		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd CAL_R",
-					dsp->cal_z);
-		if (!ret)
-			ret = wm_adsp_k_ctl_put(dsp,
-					"DSP1X Protection cd CAL_STATUS",
-					dsp->cal_status);
-		if (!ret)
-			ret = wm_adsp_k_ctl_put(dsp,
-					"DSP1X Protection cd CAL_CHECKSUM",
-					dsp->cal_chksum);
-		if (!ret) {
-			wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_R");
-			wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_STATUS");
-			wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_CHECKSUM");
-		}
+		r = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd CAL_R",
+				      dsp->cal_z);
+		if (r < 0 && r != -ENOENT)
+			ret = r;
+		r = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd CAL_STATUS",
+				      dsp->cal_status);
+		if (r < 0 && r != -ENOENT && !ret)
+			ret = r;
+		r = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd CAL_CHECKSUM",
+				      dsp->cal_chksum);
+		if (r < 0 && r != -ENOENT && !ret)
+			ret = r;
+
+		wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_R");
+		wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_STATUS");
+		wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_CHECKSUM");
 
 		/*
 		 * Restore bypass state after a firmware reload. The separate
@@ -3432,11 +3437,10 @@ static int wm_adsp_halo_apply_calibration(struct wm_adsp *dsp)
 			int enh_bypass = (dsp->block_bypass_in_enh_set ?
 				dsp->block_bypass_in_enh : dsp->block_bypass) ?
 				0x00400001 : 0;
-			int r;
 
 			r = wm_adsp_k_ctl_put(dsp,
 				"DSP1X Protection cd BYPASS_IN_ENH", enh_bypass);
-			if (r < 0 && r != -ENOENT)
+			if (r < 0 && r != -ENOENT && !ret)
 				ret = r;
 			r = wm_adsp_k_ctl_put(dsp,
 				"DSP1X Protection cd BYPASS_EQ", bypass);
@@ -3455,13 +3459,9 @@ static int wm_adsp_halo_apply_calibration(struct wm_adsp *dsp)
 	default:
 		break;
 	}
-	if (ret == -ENOENT) {
-		adsp_dbg(dsp, "Calibration controls not available yet\n");
-		return 0;
-	}
+
 	return ret;
 }
-
 int wm_adsp_halo_early_event(struct wm_adsp *dsp, int event)
 {
 	struct wm_coeff_ctl *ctl;
