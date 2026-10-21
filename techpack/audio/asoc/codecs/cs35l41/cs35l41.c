@@ -175,6 +175,164 @@ static int cs35l41_halo_booted_put(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+
+/* Cepheus exposes the vendor DSP calibration and firmware-selection controls. */
+static int cs35l41_dsp_fw_get(struct snd_kcontrol *kcontrol,
+			      struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component);
+
+	ucontrol->value.enumerated.item[0] = cs35l41->dsp.fw;
+	return 0;
+}
+
+static int cs35l41_dsp_fw_put(struct snd_kcontrol *kcontrol,
+			      struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component);
+	struct wm_adsp *dsp = &cs35l41->dsp;
+	unsigned int fw = ucontrol->value.enumerated.item[0];
+	int ret = 0;
+
+	if (fw >= WM_ADSP_NUM_FW)
+		return -EINVAL;
+	mutex_lock(&dsp->pwr_lock);
+	if (dsp->running) {
+		ret = -EBUSY;
+	} else if (dsp->fw != fw) {
+		dsp->fw = fw;
+		dsp->booted = false;
+		cs35l41->halo_booted = false;
+		ret = 1;
+	}
+	mutex_unlock(&dsp->pwr_lock);
+	return ret;
+}
+
+#define CS35L41_CAL_GET(_name, _field) \
+static int _name(struct snd_kcontrol *kcontrol, \
+		 struct snd_ctl_elem_value *ucontrol) \
+{ \
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol); \
+	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component); \
+	ucontrol->value.integer.value[0] = cs35l41->dsp._field; \
+	return 0; \
+}
+
+#define CS35L41_CAL_PUT(_name, _field) \
+static int _name(struct snd_kcontrol *kcontrol, \
+		 struct snd_ctl_elem_value *ucontrol) \
+{ \
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol); \
+	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component); \
+	struct wm_adsp *dsp = &cs35l41->dsp; \
+	int value = ucontrol->value.integer.value[0]; \
+	if (dsp->_field == value) \
+		return 0; \
+	dsp->_field = value; \
+	return 1; \
+}
+
+CS35L41_CAL_GET(cs35l41_cal_z_get, cal_z)
+CS35L41_CAL_PUT(cs35l41_cal_z_put, cal_z)
+CS35L41_CAL_GET(cs35l41_ambient_get, ambient)
+CS35L41_CAL_PUT(cs35l41_ambient_put, ambient)
+CS35L41_CAL_GET(cs35l41_cal_status_get, cal_status)
+CS35L41_CAL_PUT(cs35l41_cal_status_put, cal_status)
+CS35L41_CAL_GET(cs35l41_cal_chksum_get, cal_chksum)
+CS35L41_CAL_PUT(cs35l41_cal_chksum_put, cal_chksum)
+
+#undef CS35L41_CAL_GET
+#undef CS35L41_CAL_PUT
+
+static const char * const cs35l41_dsp_toggle_text[] = { "Off", "On" };
+static const struct soc_enum cs35l41_dsp_toggle_enum =
+	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(cs35l41_dsp_toggle_text),
+			    cs35l41_dsp_toggle_text);
+
+static int cs35l41_block_bypass_get(struct snd_kcontrol *kcontrol,
+				    struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component);
+
+	ucontrol->value.enumerated.item[0] = cs35l41->dsp.block_bypass;
+	return 0;
+}
+
+static int cs35l41_block_bypass_put(struct snd_kcontrol *kcontrol,
+				    struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component);
+	struct wm_adsp *dsp = &cs35l41->dsp;
+	int value = !!ucontrol->value.enumerated.item[0];
+	int ret = 0;
+
+	mutex_lock(&dsp->pwr_lock);
+	if (dsp->block_bypass != value) {
+		dsp->block_bypass = value;
+		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS",
+					value ? 0x00400001 : 0x00000000);
+		if (!ret)
+			ret = 1;
+	}
+	mutex_unlock(&dsp->pwr_lock);
+	return ret;
+}
+
+static int cs35l41_block_bypass_in_enh_get(struct snd_kcontrol *kcontrol,
+					   struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component);
+
+	ucontrol->value.enumerated.item[0] = cs35l41->dsp.block_bypass_in_enh;
+	return 0;
+}
+
+static int cs35l41_block_bypass_in_enh_put(struct snd_kcontrol *kcontrol,
+					   struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component);
+	struct wm_adsp *dsp = &cs35l41->dsp;
+	int value = !!ucontrol->value.enumerated.item[0];
+	int ret = 0;
+
+	mutex_lock(&dsp->pwr_lock);
+	if (dsp->block_bypass_in_enh != value) {
+		dsp->block_bypass_in_enh = value;
+		ret = wm_adsp_k_ctl_put(dsp,
+					"DSP1X Protection cd BYPASS_IN_ENH",
+					value ? 0x00400001 : 0x00000000);
+		if (!ret)
+			ret = 1;
+	}
+	mutex_unlock(&dsp->pwr_lock);
+	return ret;
+}
+
+static const struct snd_kcontrol_new cs35l41_dsp_controls[] = {
+	SOC_ENUM_EXT("DSP1 Firmware", wm_adsp_fw_enum[0],
+		     cs35l41_dsp_fw_get, cs35l41_dsp_fw_put),
+	SOC_SINGLE_EXT("DSP Set CAL_Z", SND_SOC_NOPM, 0, 0xFFFFFF, 0,
+		       cs35l41_cal_z_get, cs35l41_cal_z_put),
+	SOC_SINGLE_EXT("DSP Set AMBIENT", SND_SOC_NOPM, 0, 0xFFFFFF, 0,
+		       cs35l41_ambient_get, cs35l41_ambient_put),
+	SOC_SINGLE_EXT("DSP Set CAL_STATUS", SND_SOC_NOPM, 0, 0xFFFFFF, 0,
+		       cs35l41_cal_status_get, cs35l41_cal_status_put),
+	SOC_SINGLE_EXT("DSP Set CAL_CHKSUM", SND_SOC_NOPM, 0, 0xFFFFFF, 0,
+		       cs35l41_cal_chksum_get, cs35l41_cal_chksum_put),
+	SOC_ENUM_EXT("DSP Block Bypass", cs35l41_dsp_toggle_enum,
+		     cs35l41_block_bypass_get, cs35l41_block_bypass_put),
+	SOC_ENUM_EXT("DSP Block Bypass_IN_ENH", cs35l41_dsp_toggle_enum,
+		     cs35l41_block_bypass_in_enh_get,
+		     cs35l41_block_bypass_in_enh_put),
+};
+
 static int vendor_id_get(struct snd_kcontrol *kcontrol,
 			 struct snd_ctl_elem_value *ucontrol)
 {
@@ -1659,6 +1817,14 @@ static int cs35l41_codec_probe(struct snd_soc_component *codec)
 		return ret;
 	}
 
+	ret = snd_soc_add_component_controls(codec, cs35l41_dsp_controls,
+					    ARRAY_SIZE(cs35l41_dsp_controls));
+	if (ret < 0) {
+		wm_adsp2_component_remove(&cs35l41->dsp, codec);
+		cs35l41->component = NULL;
+		return ret;
+	}
+
 	snd_soc_dapm_ignore_suspend(dapm, "AMP Playback");
 	snd_soc_dapm_ignore_suspend(dapm, "AMP Capture");
 	snd_soc_dapm_ignore_suspend(dapm, "Main AMP");
@@ -1755,6 +1921,7 @@ static void cs35l41_codec_remove(struct snd_soc_component *codec)
 	if (ret < 0)
 		dev_warn(cs35l41->dev, "DSP component cleanup failed: %d\n", ret);
 
+	wm_adsp2_remove(&cs35l41->dsp);
 	cs35l41->component = NULL;
 }
 
