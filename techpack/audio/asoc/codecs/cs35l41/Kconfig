@@ -5,6 +5,7 @@ config SND_SOC_CS35L41
 	select REGMAP_I2C
 	select MFD_SPK_ID
 	select SND_SOC_COMPRESS
+	select SND_SOC_WM_ADSP
 	help
 	  Enable support for the Cirrus Logic CS35L41 smart amplifier
 	  used by Xiaomi Cepheus.
