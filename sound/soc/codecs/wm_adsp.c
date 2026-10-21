@@ -3621,7 +3621,7 @@ int wm_adsp_halo_event(struct wm_adsp *dsp,
 		       struct snd_soc_dapm_widget *w,
 		       struct snd_kcontrol *kcontrol, int event)
 {
-	int ret = 0;
+	int ret = 0, cleanup_ret;
 
 	(void)w;
 	(void)kcontrol;
@@ -3677,21 +3677,23 @@ int wm_adsp_halo_event(struct wm_adsp *dsp,
 			dsp->ops->show_fw_status(dsp);
 		mutex_lock(&dsp->pwr_lock);
 		dsp->running = false;
-		regmap_update_bits(dsp->regmap,
-				   dsp->base + HALO_CCM_CORE_CONTROL,
-				   HALO_CORE_EN, 0);
-		ret = wm_halo_clear_stream_arb(dsp);
+		ret = regmap_update_bits(dsp->regmap,
+					 dsp->base + HALO_CCM_CORE_CONTROL,
+					 HALO_CORE_EN, 0);
+		cleanup_ret = wm_halo_clear_stream_arb(dsp);
+		if (!ret)
+			ret = cleanup_ret;
 		if (wm_adsp_fw[dsp->fw].num_caps)
 			wm_adsp_buffer_free(dsp);
 		dsp->fatal_error = false;
 		mutex_unlock(&dsp->pwr_lock);
 		if (ret)
-			adsp_warn(dsp, "Stream arbiter cleanup failed: %d\n", ret);
+			adsp_warn(dsp, "HALO shutdown cleanup failed: %d\n", ret);
 		break;
 	default:
 		break;
 	}
-	return 0;
+	return ret;
 
 start_error:
 	mutex_unlock(&dsp->pwr_lock);
