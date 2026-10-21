@@ -1888,6 +1888,7 @@ static int cs35l41_codec_probe(struct snd_soc_component *codec)
 					    ARRAY_SIZE(cs35l41_dsp_controls));
 	if (ret < 0) {
 		wm_adsp2_component_remove(&cs35l41->dsp, codec);
+		cs35l41->dsp.component = NULL;
 		cs35l41->component = NULL;
 		return ret;
 	}
@@ -1988,6 +1989,7 @@ static void cs35l41_codec_remove(struct snd_soc_component *codec)
 	if (ret < 0)
 		dev_warn(cs35l41->dev, "DSP component cleanup failed: %d\n", ret);
 
+	cs35l41->dsp.component = NULL;
 	cs35l41->component = NULL;
 }
 
