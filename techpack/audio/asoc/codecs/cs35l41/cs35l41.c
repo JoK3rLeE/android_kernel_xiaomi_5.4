@@ -342,6 +342,8 @@ static int cs35l41_block_bypass_put(struct snd_kcontrol *kcontrol,
 	mutex_lock(&dsp->pwr_lock);
 	if (dsp->block_bypass != value) {
 		dsp->block_bypass = value;
+		dsp->block_bypass_in_enh = value;
+		dsp->block_bypass_in_enh_set = false;
 		for (i = 0; i < ARRAY_SIZE(cs35l41_bypass_control_names); i++) {
 			ret = wm_adsp_k_ctl_put(dsp,
 					cs35l41_bypass_control_names[i],
