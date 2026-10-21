@@ -295,6 +295,13 @@ static int cs35l41_block_bypass_get(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static const char * const cs35l41_bypass_control_names[] = {
+	"DSP1X Protection cd BYPASS_IN_ENH",
+	"DSP1X Protection cd BYPASS_EQ",
+	"DSP1X Protection cd BYPASS_ACTI",
+	"DSP1X Protection cd BYPASS_MBL",
+};
+
 static int cs35l41_block_bypass_put(struct snd_kcontrol *kcontrol,
 				    struct snd_ctl_elem_value *ucontrol)
 {
@@ -302,20 +309,25 @@ static int cs35l41_block_bypass_put(struct snd_kcontrol *kcontrol,
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component);
 	struct wm_adsp *dsp = &cs35l41->dsp;
 	int value = !!ucontrol->value.enumerated.item[0];
-	int ret = 0;
+	int i, ret = 0;
 
 	mutex_lock(&dsp->pwr_lock);
 	if (dsp->block_bypass != value) {
 		dsp->block_bypass = value;
-		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd BYPASS",
+		for (i = 0; i < ARRAY_SIZE(cs35l41_bypass_control_names); i++) {
+			ret = wm_adsp_k_ctl_put(dsp,
+					cs35l41_bypass_control_names[i],
 					value ? 0x00400001 : 0x00000000);
+			if (ret < 0 && ret != -ENOENT)
+				break;
+			ret = 0;
+		}
 		if (!ret)
 			ret = 1;
 	}
 	mutex_unlock(&dsp->pwr_lock);
 	return ret;
 }
-
 static int cs35l41_block_bypass_in_enh_get(struct snd_kcontrol *kcontrol,
 					   struct snd_ctl_elem_value *ucontrol)
 {
@@ -336,11 +348,15 @@ static int cs35l41_block_bypass_in_enh_put(struct snd_kcontrol *kcontrol,
 	int ret = 0;
 
 	mutex_lock(&dsp->pwr_lock);
-	if (dsp->block_bypass_in_enh != value) {
+	if (dsp->block_bypass_in_enh != value ||
+	    !dsp->block_bypass_in_enh_set) {
 		dsp->block_bypass_in_enh = value;
+		dsp->block_bypass_in_enh_set = true;
 		ret = wm_adsp_k_ctl_put(dsp,
 					"DSP1X Protection cd BYPASS_IN_ENH",
 					value ? 0x00400001 : 0x00000000);
+		if (ret == -ENOENT)
+			ret = 0;
 		if (!ret)
 			ret = 1;
 	}
