@@ -3666,8 +3666,11 @@ int wm_halo_init(struct wm_adsp *dsp)
 {
 	int i, ret;
 
-	/* Keep teardown safe even if name allocation fails in common init. */
+	/* Keep teardown safe if common-init name allocation fails. */
+	INIT_LIST_HEAD(&dsp->alg_regions);
 	INIT_LIST_HEAD(&dsp->ctl_list);
+	INIT_LIST_HEAD(&dsp->compr_list);
+	INIT_LIST_HEAD(&dsp->buffer_list);
 	dsp->rx_rate_cache = NULL;
 	dsp->tx_rate_cache = NULL;
 	ret = wm_adsp_common_init(dsp);
