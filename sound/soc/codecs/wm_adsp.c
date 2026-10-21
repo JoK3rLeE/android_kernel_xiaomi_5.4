@@ -376,6 +376,12 @@ static const char *wm_adsp_fw_text[WM_ADSP_NUM_FW] = {
 	[WM_ADSP_FW_CALIB]    = "Diag Z",
 };
 
+/* Preserve the upstream firmware enum for non-CS35L41 codecs. */
+static const char * const wm_adsp_generic_fw_text[] = {
+	"MBC/VSS", "MasterHiFi", "Tx", "Tx Speaker", "Rx", "Rx ANC",
+	"Voice Ctrl", "ASR Assist", "Dbg Trace", "Protection", "Misc",
+};
+
 struct wm_adsp_system_config_xm_hdr {
 	__be32 sys_enable;
 	__be32 fw_id;
@@ -818,13 +824,13 @@ int wm_adsp_fw_put(struct snd_kcontrol *kcontrol,
 EXPORT_SYMBOL_GPL(wm_adsp_fw_put);
 
 const struct soc_enum wm_adsp_fw_enum[] = {
-	SOC_ENUM_SINGLE(0, 0, ARRAY_SIZE(wm_adsp_fw_text), wm_adsp_fw_text),
-	SOC_ENUM_SINGLE(0, 1, ARRAY_SIZE(wm_adsp_fw_text), wm_adsp_fw_text),
-	SOC_ENUM_SINGLE(0, 2, ARRAY_SIZE(wm_adsp_fw_text), wm_adsp_fw_text),
-	SOC_ENUM_SINGLE(0, 3, ARRAY_SIZE(wm_adsp_fw_text), wm_adsp_fw_text),
-	SOC_ENUM_SINGLE(0, 4, ARRAY_SIZE(wm_adsp_fw_text), wm_adsp_fw_text),
-	SOC_ENUM_SINGLE(0, 5, ARRAY_SIZE(wm_adsp_fw_text), wm_adsp_fw_text),
-	SOC_ENUM_SINGLE(0, 6, ARRAY_SIZE(wm_adsp_fw_text), wm_adsp_fw_text),
+	SOC_ENUM_SINGLE(0, 0, ARRAY_SIZE(wm_adsp_generic_fw_text), wm_adsp_generic_fw_text),
+	SOC_ENUM_SINGLE(0, 1, ARRAY_SIZE(wm_adsp_generic_fw_text), wm_adsp_generic_fw_text),
+	SOC_ENUM_SINGLE(0, 2, ARRAY_SIZE(wm_adsp_generic_fw_text), wm_adsp_generic_fw_text),
+	SOC_ENUM_SINGLE(0, 3, ARRAY_SIZE(wm_adsp_generic_fw_text), wm_adsp_generic_fw_text),
+	SOC_ENUM_SINGLE(0, 4, ARRAY_SIZE(wm_adsp_generic_fw_text), wm_adsp_generic_fw_text),
+	SOC_ENUM_SINGLE(0, 5, ARRAY_SIZE(wm_adsp_generic_fw_text), wm_adsp_generic_fw_text),
+	SOC_ENUM_SINGLE(0, 6, ARRAY_SIZE(wm_adsp_generic_fw_text), wm_adsp_generic_fw_text),
 };
 EXPORT_SYMBOL_GPL(wm_adsp_fw_enum);
 
