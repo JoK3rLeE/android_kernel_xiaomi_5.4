@@ -112,10 +112,22 @@ static int cs35l41_dsp_power_ev(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
-		if (!cs35l41->halo_booted)
+		if (!cs35l41->halo_booted) {
+			/*
+			 * A forced reload or failed start can leave firmware state
+			 * registered even though halo_booted is clear. Tear it down
+			 * before queueing the next boot.
+			 */
+			if (cs35l41->dsp.booted) {
+				wm_adsp_halo_event(&cs35l41->dsp, NULL, NULL,
+						   SND_SOC_DAPM_PRE_PMD);
+				wm_adsp_halo_early_event(&cs35l41->dsp,
+							 SND_SOC_DAPM_PRE_PMD);
+			}
 			ret = wm_adsp_halo_early_event(&cs35l41->dsp, event);
-		else
+		} else {
 			cs35l41->dsp.booted = true;
+		}
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
 		if (!cs35l41->halo_booted) {
