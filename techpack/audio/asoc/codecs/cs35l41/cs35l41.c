@@ -226,7 +226,6 @@ static int cs35l41_dsp_fw_put(struct snd_kcontrol *kcontrol,
 	struct wm_adsp *dsp = &cs35l41->dsp;
 	unsigned int item = ucontrol->value.enumerated.item[0];
 	unsigned int fw;
-	bool cleanup = false;
 	int ret = 0;
 
 	if (item >= ARRAY_SIZE(cs35l41_dsp_fw_text))
@@ -237,35 +236,18 @@ static int cs35l41_dsp_fw_put(struct snd_kcontrol *kcontrol,
 	fw = item >= 10 ? item + 1 : item;
 
 	mutex_lock(&dsp->pwr_lock);
-	if (dsp->running) {
-		ret = -EBUSY;
-	} else if (dsp->fw != fw) {
-		cleanup = dsp->booted;
-		ret = 1;
-	}
-	mutex_unlock(&dsp->pwr_lock);
-	if (ret != 1)
-		return ret;
-
-	/* Release stale algorithm/control state before selecting new firmware. */
-	if (cleanup) {
-		wm_adsp_halo_event(dsp, NULL, NULL, SND_SOC_DAPM_PRE_PMD);
-		wm_adsp_halo_early_event(dsp, SND_SOC_DAPM_PRE_PMD);
-	}
-
-	mutex_lock(&dsp->pwr_lock);
-	if (dsp->running) {
+	if (dsp->fw == fw) {
+		ret = 0;
+	} else if (dsp->booted || dsp->running || dsp->compr) {
 		ret = -EBUSY;
 	} else {
 		dsp->fw = fw;
-		dsp->booted = false;
 		cs35l41->halo_booted = false;
 		ret = 1;
 	}
 	mutex_unlock(&dsp->pwr_lock);
 	return ret;
-}
-#define CS35L41_CAL_GET(_name, _field) \
+}#define CS35L41_CAL_GET(_name, _field) \
 static int _name(struct snd_kcontrol *kcontrol, \
 		 struct snd_ctl_elem_value *ucontrol) \
 { \
