@@ -113,16 +113,16 @@ static int cs35l41_dsp_power_ev(struct snd_soc_dapm_widget *w,
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
 		if (!cs35l41->halo_booted)
-			ret = wm_halo_early_event(w, kcontrol, event);
+			ret = wm_adsp_halo_early_event(&cs35l41->dsp, event);
 		else
 			cs35l41->dsp.booted = true;
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
 		if (!cs35l41->halo_booted) {
-			ret = wm_halo_early_event(w, kcontrol, event);
+			ret = wm_adsp_halo_early_event(&cs35l41->dsp, event);
 			if (ret)
 				return ret;
-			ret = wm_halo_event(w, kcontrol, event);
+			ret = wm_adsp_halo_event(&cs35l41->dsp, w, kcontrol, event);
 		}
 		break;
 	default:
@@ -143,7 +143,7 @@ static int cs35l41_dsp_load_ev(struct snd_soc_dapm_widget *w,
 	int ret = 0;
 
 	if (event == SND_SOC_DAPM_POST_PMU && !cs35l41->halo_booted) {
-		ret = wm_halo_event(w, kcontrol, event);
+		ret = wm_adsp_halo_event(&cs35l41->dsp, w, kcontrol, event);
 		if (!ret)
 			cs35l41->halo_booted = true;
 		else
