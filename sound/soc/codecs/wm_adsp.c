@@ -315,6 +315,12 @@
 #define HALO_MPU_VIO_ERR_WR_MASK            0x00008000
 #define HALO_MPU_VIO_ERR_SRC_MASK           0x00007fff
 #define HALO_MPU_VIO_ERR_SRC_SHIFT                   0
+#define HALO_MPU_VIO_SRAM                   0x01
+#define HALO_MPU_VIO_REG                    0x02
+#define HALO_MPU_VIO_AHB                    0x04
+#define HALO_MPU_VIO_EREG                   0x08
+#define HALO_MPU_VIO_EXTERNAL_MEM           0x10
+#define HALO_MPU_VIO_NON_EXIST              0x20
 
 static struct wm_adsp_ops wm_adsp1_ops;
 static struct wm_adsp_ops wm_adsp2_ops[];
@@ -4700,6 +4706,30 @@ error:
 }
 EXPORT_SYMBOL_GPL(wm_adsp2_bus_error);
 
+static void wm_halo_dump_fault_info(struct wm_adsp *dsp, const char *region,
+				    unsigned int addr, unsigned int status)
+{
+	unsigned int write = status & HALO_MPU_VIO_ERR_WR_MASK;
+	unsigned int type = (status & HALO_MPU_VIO_STS_MASK) >>
+			    HALO_MPU_VIO_STS_SHIFT;
+	unsigned int src = (status & HALO_MPU_VIO_ERR_SRC_MASK) >>
+			   HALO_MPU_VIO_ERR_SRC_SHIFT;
+
+	adsp_warn(dsp, "%s: FAULT_ADDR:0x%x FAULT_STATUS:0x%x %s\n",
+		  region, addr, status, write ? "write" : "read");
+	if (!src)
+		adsp_warn(dsp, "%s: SRC=HALO\n", region);
+	else
+		adsp_warn(dsp, "%s: SRC=Requestor%u\n", region, src);
+	adsp_warn(dsp, "%s: %s %s %s %s %s %s\n", region,
+		  type & HALO_MPU_VIO_SRAM ? "SRAM" : "",
+		  type & HALO_MPU_VIO_REG ? "REG" : "",
+		  type & HALO_MPU_VIO_AHB ? "AHB" : "",
+		  type & HALO_MPU_VIO_EREG ? "EREG" : "",
+		  type & HALO_MPU_VIO_EXTERNAL_MEM ? "ExtMem" : "",
+		  type & HALO_MPU_VIO_NON_EXIST ? "NotExist" : "");
+}
+
 irqreturn_t wm_halo_bus_error(int irq, void *data)
 {
 	struct wm_adsp *dsp = (struct wm_adsp *)data;
@@ -4742,9 +4772,9 @@ irqreturn_t wm_halo_bus_error(int irq, void *data)
 		goto exit_unlock;
 	}
 
-	adsp_warn(dsp, "XM: STATUS:0x%x ADDR:0x%x\n", fault[1], fault[0]);
-	adsp_warn(dsp, "YM: STATUS:0x%x ADDR:0x%x\n", fault[3], fault[2]);
-	adsp_warn(dsp, "PM: STATUS:0x%x ADDR:0x%x\n", fault[5], fault[4]);
+	wm_halo_dump_fault_info(dsp, "XM", fault[0], fault[1]);
+	wm_halo_dump_fault_info(dsp, "YM", fault[2], fault[3]);
+	wm_halo_dump_fault_info(dsp, "PM", fault[4], fault[5]);
 
 	ret = regmap_multi_reg_write(dsp->regmap, clear, ARRAY_SIZE(clear));
 	if (ret)
