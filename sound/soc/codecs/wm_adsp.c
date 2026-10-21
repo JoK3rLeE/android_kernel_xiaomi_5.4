@@ -3517,6 +3517,10 @@ static int wm_adsp_halo_apply_calibration(struct wm_adsp *dsp)
 {
 	int ret = 0, r;
 
+	/* These controls and cached values are specific to Cepheus CS35L41. */
+	if (!dsp->part || strcmp(dsp->part, "cs35l41"))
+		return 0;
+
 	switch (dsp->fw) {
 	case WM_ADSP_FW_CALIB:
 		r = wm_adsp_k_ctl_put(dsp, "DSP1X Diag Z cd CAL_AMBIENT",
