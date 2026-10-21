@@ -1921,7 +1921,6 @@ static void cs35l41_codec_remove(struct snd_soc_component *codec)
 	if (ret < 0)
 		dev_warn(cs35l41->dev, "DSP component cleanup failed: %d\n", ret);
 
-	wm_adsp2_remove(&cs35l41->dsp);
 	cs35l41->component = NULL;
 }
 
@@ -2168,6 +2167,7 @@ static int cs35l41_dsp_init(struct cs35l41_private *cs35l41)
 
 	dsp = &cs35l41->dsp;
 	dsp->part = "cs35l41";
+	dsp->name = "DSP1";
 	dsp->fw = WM_ADSP_FW_SPK_PROT;
 	dsp->num = 1;
 	dsp->type = WMFW_HALO;
