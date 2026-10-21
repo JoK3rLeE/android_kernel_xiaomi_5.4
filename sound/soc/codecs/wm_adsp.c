@@ -3410,6 +3410,11 @@ static int wm_adsp_halo_apply_calibration(struct wm_adsp *dsp)
 			ret = wm_adsp_k_ctl_put(dsp,
 					"DSP1X Protection cd CAL_CHECKSUM",
 					dsp->cal_chksum);
+		if (!ret) {
+			wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_R");
+			wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_STATUS");
+			wm_adsp_k_ctl_get(dsp, "DSP1X Protection cd CAL_CHECKSUM");
+		}
 		break;
 	default:
 		break;
@@ -3453,6 +3458,9 @@ int wm_adsp_halo_event(struct wm_adsp *dsp,
 		       struct snd_kcontrol *kcontrol, int event)
 {
 	int ret = 0;
+
+	(void)w;
+	(void)kcontrol;
 
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
@@ -3616,6 +3624,10 @@ int wm_halo_init(struct wm_adsp *dsp)
 {
 	int i, ret;
 
+	/* Keep teardown safe even if name allocation fails in common init. */
+	INIT_LIST_HEAD(&dsp->ctl_list);
+	dsp->rx_rate_cache = NULL;
+	dsp->tx_rate_cache = NULL;
 	ret = wm_adsp_common_init(dsp);
 	if (ret)
 		return ret;
