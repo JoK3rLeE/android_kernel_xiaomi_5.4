@@ -122,13 +122,15 @@ static int cs35l41_i2c_remove(struct i2c_client *client)
 	 */
 	disable_irq(cs35l41->irq);
 
-	/*
-	 * Stop firmware boot work before ASoC unregisters the component it
-	 * may reference. wm_adsp2_remove() repeats this cancellation before
-	 * freeing DSP state, which is harmless once the work is idle.
-	 */
+	/* Stop firmware boot work before the component is unregistered. */
 	cancel_work_sync(&cs35l41->dsp.boot_work);
 
+	/*
+	 * Shut down the HALO core while its component and firmware controls are
+	 * still available, then clear firmware/algorithm state before freeing it.
+	 */
+	wm_adsp_halo_event(&cs35l41->dsp, NULL, NULL, SND_SOC_DAPM_PRE_PMD);
+	wm_adsp_halo_early_event(&cs35l41->dsp, SND_SOC_DAPM_PRE_PMD);
 	snd_soc_unregister_component(cs35l41->dev);
 	wm_adsp2_remove(&cs35l41->dsp);
 
