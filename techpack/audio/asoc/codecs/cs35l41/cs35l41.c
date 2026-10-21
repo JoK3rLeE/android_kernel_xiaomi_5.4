@@ -131,6 +131,15 @@ static int cs35l41_dsp_power_ev(struct snd_soc_dapm_widget *w,
 					return ret;
 			}
 			ret = wm_adsp_halo_early_event(dsp, event);
+		} else {
+			/*
+			 * Preserve the Xiaomi DSP Booted control semantics: firmware
+			 * may already be loaded by the platform, so reflect that
+			 * state into WM ADSP before the POST_PMU event validates it.
+			 */
+			mutex_lock(&dsp->pwr_lock);
+			dsp->booted = true;
+			mutex_unlock(&dsp->pwr_lock);
 		}
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
