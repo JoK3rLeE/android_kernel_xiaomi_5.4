@@ -31,7 +31,7 @@
 #include <linux/regmap.h>
 #include <linux/gpio.h>
 
-#include "wm_adsp.h"
+#include <wm_adsp.h>
 #include "cs35l41.h"
 #include <sound/cs35l41.h>
 
