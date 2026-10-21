@@ -308,7 +308,24 @@ static int cs35l41_cal_z_put(struct snd_kcontrol *kcontrol,
 CS35L41_CAL_GET(cs35l41_ambient_get, ambient)
 CS35L41_CAL_PUT(cs35l41_ambient_put, ambient)
 CS35L41_CAL_GET(cs35l41_cal_status_get, cal_status)
-CS35L41_CAL_PUT(cs35l41_cal_status_put, cal_status)
+static int cs35l41_cal_status_put(struct snd_kcontrol *kcontrol,
+				 struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component);
+	struct wm_adsp *dsp = &cs35l41->dsp;
+	int value = ucontrol->value.integer.value[0];
+
+	mutex_lock(&dsp->pwr_lock);
+	if (dsp->cal_status == value) {
+		mutex_unlock(&dsp->pwr_lock);
+		return 0;
+	}
+	dsp->cal_status = value;
+	dsp->cal_chksum = dsp->cal_z + dsp->cal_status;
+	mutex_unlock(&dsp->pwr_lock);
+	return 1;
+}
 CS35L41_CAL_GET(cs35l41_cal_chksum_get, cal_chksum)
 CS35L41_CAL_PUT(cs35l41_cal_chksum_put, cal_chksum)
 
