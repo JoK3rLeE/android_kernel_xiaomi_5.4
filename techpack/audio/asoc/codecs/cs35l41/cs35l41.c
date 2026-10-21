@@ -189,7 +189,11 @@ static int cs35l41_dsp_fw_get(struct snd_kcontrol *kcontrol,
 {
 	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component);
-	unsigned int fw = cs35l41->dsp.fw;
+	unsigned int fw;
+
+	mutex_lock(&cs35l41->dsp.pwr_lock);
+	fw = cs35l41->dsp.fw;
+	mutex_unlock(&cs35l41->dsp.pwr_lock);
 
 	if (fw == WM_ADSP_FW_DIAG)
 		ucontrol->value.enumerated.item[0] = 10;
