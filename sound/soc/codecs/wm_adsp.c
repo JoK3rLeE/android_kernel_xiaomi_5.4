@@ -239,6 +239,12 @@
 #define HALO_SCRATCH4                        0x005d8
 #define HALO_CCM_CORE_CONTROL                0x41000
 #define HALO_CORE_RESET                     0x00000200
+#define HALO_SYS_INFO_XM_SRAM_SIZE           0x00010
+#define HALO_SYS_INFO_YM_SRAM_SIZE           0x00018
+#define HALO_SYS_INFO_XM_BANK_SIZE           0x00038
+#define HALO_SYS_INFO_YM_BANK_SIZE           0x0003c
+#define HALO_MPU_UNLOCK_CODE_0               0x5555
+#define HALO_MPU_UNLOCK_CODE_1               0xaaaa
 #define HALO_SAMPLE_RATE_RX1                 0x00080
 #define HALO_SAMPLE_RATE_TX1                 0x00280
 #define HALO_INTP_CTL_NMI_CONTROL            0x46008
@@ -3144,6 +3150,105 @@ static void wm_adsp2_stop_core(struct wm_adsp *dsp)
 }
 
 
+static const unsigned int halo_mpu_access[18] = {
+	HALO_MPU_WINDOW_ACCESS_0,
+	HALO_MPU_XREG_ACCESS_0,
+	HALO_MPU_YREG_ACCESS_0,
+	HALO_MPU_XMEM_ACCESS_1,
+	HALO_MPU_YMEM_ACCESS_1,
+	HALO_MPU_WINDOW_ACCESS_1,
+	HALO_MPU_XREG_ACCESS_1,
+	HALO_MPU_YREG_ACCESS_1,
+	HALO_MPU_XMEM_ACCESS_2,
+	HALO_MPU_YMEM_ACCESS_2,
+	HALO_MPU_WINDOW_ACCESS_2,
+	HALO_MPU_XREG_ACCESS_2,
+	HALO_MPU_YREG_ACCESS_2,
+	HALO_MPU_XMEM_ACCESS_3,
+	HALO_MPU_YMEM_ACCESS_3,
+	HALO_MPU_WINDOW_ACCESS_3,
+	HALO_MPU_XREG_ACCESS_3,
+	HALO_MPU_YREG_ACCESS_3,
+};
+
+/* Use the CS35L41 sysinfo bank sizes rather than unlocking nonexistent banks. */
+static int wm_halo_configure_mpu_cs35l41(struct wm_adsp *dsp)
+{
+	struct regmap *regmap = dsp->regmap;
+	unsigned int xm_bank_sz, ym_bank_sz, xm_sz, ym_sz;
+	unsigned int xm_acc_cfg, ym_acc_cfg, lock_cfg;
+	unsigned int sysinfo_base = dsp->base_sysinfo;
+	unsigned int dsp_base = dsp->base;
+	int i, ret;
+
+	ret = regmap_read(regmap, sysinfo_base + HALO_SYS_INFO_XM_BANK_SIZE,
+			  &xm_bank_sz);
+	if (ret || !xm_bank_sz) {
+		adsp_err(dsp, "Failed to read XM bank size: %d\n", ret);
+		return ret ? ret : -EINVAL;
+	}
+	ret = regmap_read(regmap, sysinfo_base + HALO_SYS_INFO_YM_BANK_SIZE,
+			  &ym_bank_sz);
+	if (ret || !ym_bank_sz) {
+		adsp_err(dsp, "Failed to read YM bank size: %d\n", ret);
+		return ret ? ret : -EINVAL;
+	}
+	ret = regmap_read(regmap, sysinfo_base + HALO_SYS_INFO_XM_SRAM_SIZE,
+			  &xm_sz);
+	if (ret)
+		return ret;
+	ret = regmap_read(regmap, sysinfo_base + HALO_SYS_INFO_YM_SRAM_SIZE,
+			  &ym_sz);
+	if (ret)
+		return ret;
+
+	if (!xm_sz || !ym_sz || xm_sz / xm_bank_sz > 32 ||
+	    ym_sz / ym_bank_sz > 32) {
+		adsp_err(dsp, "Invalid HALO SRAM geometry XM=%u/%u YM=%u/%u\n",
+			 xm_sz, xm_bank_sz, ym_sz, ym_bank_sz);
+		return -EINVAL;
+	}
+	xm_acc_cfg = (xm_sz / xm_bank_sz == 32) ? 0xffffffff :
+		     (1U << (xm_sz / xm_bank_sz)) - 1;
+	ym_acc_cfg = (ym_sz / ym_bank_sz == 32) ? 0xffffffff :
+		     (1U << (ym_sz / ym_bank_sz)) - 1;
+
+	ret = regmap_write(regmap, dsp_base + HALO_MPU_LOCK_CONFIG,
+			   HALO_MPU_UNLOCK_CODE_0);
+	if (ret)
+		return ret;
+	ret = regmap_write(regmap, dsp_base + HALO_MPU_LOCK_CONFIG,
+			   HALO_MPU_UNLOCK_CODE_1);
+	if (ret)
+		return ret;
+	ret = regmap_write(regmap, dsp_base + HALO_MPU_XMEM_ACCESS_0,
+			   xm_acc_cfg);
+	if (ret)
+		goto lock_mpu;
+	ret = regmap_write(regmap, dsp_base + HALO_MPU_YMEM_ACCESS_0,
+			   ym_acc_cfg);
+	if (ret)
+		goto lock_mpu;
+
+	lock_cfg = dsp->unlock_all ? 0xffffffff : 0;
+	for (i = 0; i < ARRAY_SIZE(halo_mpu_access); i++) {
+		ret = regmap_write(regmap, dsp_base + halo_mpu_access[i],
+				   lock_cfg);
+		if (ret)
+			goto lock_mpu;
+	}
+lock_mpu:
+	{
+		int lock_ret = regmap_write(regmap,
+					    dsp_base + HALO_MPU_LOCK_CONFIG, 0);
+		if (!ret)
+			ret = lock_ret;
+		if (lock_ret)
+			adsp_err(dsp, "Failed to relock HALO MPU: %d\n", lock_ret);
+	}
+	return ret;
+}
+
 /* Cepheus CS35L41 HALO rate and stream-arbiter operations. */
 static int wm_halo_set_rate_block(struct wm_adsp *dsp, unsigned int rate_base,
 				  unsigned int n_rates, const u8 *rate_cache)
@@ -3541,13 +3646,9 @@ int wm_adsp_halo_event(struct wm_adsp *dsp,
 				   dsp->base + HALO_INTP_CTL_NMI_CONTROL, 0);
 		if (ret)
 			goto start_error;
-		if (dsp->ops->lock_memory) {
-			unsigned int lock_regions = dsp->unlock_all ?
-						    0xffffffff : dsp->lock_regions;
-			ret = dsp->ops->lock_memory(dsp, lock_regions);
-			if (ret)
-				goto start_error;
-		}
+		ret = wm_halo_configure_mpu_cs35l41(dsp);
+		if (ret)
+			goto start_error;
 		if (dsp->ops->start_core) {
 			ret = dsp->ops->start_core(dsp);
 			if (ret)
