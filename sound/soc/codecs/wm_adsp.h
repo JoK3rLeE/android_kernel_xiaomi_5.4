@@ -20,6 +20,22 @@
 #define WM_ADSP_COMPR_OK                 0
 #define WM_ADSP_COMPR_VOICE_TRIGGER      1
 
+/* Firmware IDs shared with codec drivers. Keep in sync with wm_adsp_fw[]. */
+#define WM_ADSP_FW_MBC_VSS  0
+#define WM_ADSP_FW_HIFI     1
+#define WM_ADSP_FW_TX       2
+#define WM_ADSP_FW_TX_SPK   3
+#define WM_ADSP_FW_RX       4
+#define WM_ADSP_FW_RX_ANC   5
+#define WM_ADSP_FW_CTRL     6
+#define WM_ADSP_FW_ASR      7
+#define WM_ADSP_FW_TRACE    8
+#define WM_ADSP_FW_SPK_PROT 9
+#define WM_ADSP_FW_MISC     10
+#define WM_ADSP_FW_DIAG     11
+#define WM_ADSP_FW_CALIB    12
+#define WM_ADSP_NUM_FW      13
+
 #define WM_ADSP2_REGION_0 BIT(0)
 #define WM_ADSP2_REGION_1 BIT(1)
 #define WM_ADSP2_REGION_2 BIT(2)
@@ -64,6 +80,14 @@ struct wm_adsp {
 	struct regmap *regmap;
 	struct snd_soc_component *component;
 
+	/* Cepheus CS35L41 speaker-protection calibration state. */
+	int cal_z;
+	int ambient;
+	int cal_status;
+	int cal_chksum;
+	int block_bypass;
+	int block_bypass_in_enh;
+
 	struct wm_adsp_ops *ops;
 
 	unsigned int base;
@@ -104,6 +128,8 @@ struct wm_adsp {
 	bool unlock_all;
 	unsigned int n_rx_rates;
 	unsigned int n_tx_rates;
+	u8 *rx_rate_cache;
+	u8 *tx_rate_cache;
 
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_root;
@@ -169,6 +195,14 @@ void wm_adsp2_remove(struct wm_adsp *dsp);
 int wm_adsp2_component_probe(struct wm_adsp *dsp, struct snd_soc_component *component);
 int wm_adsp2_component_remove(struct wm_adsp *dsp, struct snd_soc_component *component);
 int wm_halo_init(struct wm_adsp *dsp);
+int wm_adsp_halo_early_event(struct wm_adsp *dsp, int event);
+int wm_adsp_halo_event(struct wm_adsp *dsp,
+		       struct snd_soc_dapm_widget *w,
+		       struct snd_kcontrol *kcontrol, int event);
+int wm_halo_set_sample_rate(struct wm_adsp *dsp, bool playback,
+			    unsigned int rate_cfg);
+int wm_adsp_k_ctl_put(struct wm_adsp *dsp, const char *name, int value);
+int wm_adsp_k_ctl_get(struct wm_adsp *dsp, const char *name);
 
 int wm_adsp1_event(struct snd_soc_dapm_widget *w,
 		   struct snd_kcontrol *kcontrol, int event);
