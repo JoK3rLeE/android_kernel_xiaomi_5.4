@@ -129,8 +129,15 @@ static int cs35l41_i2c_remove(struct i2c_client *client)
 	 * Shut down the HALO core while its component and firmware controls are
 	 * still available, then clear firmware/algorithm state before freeing it.
 	 */
-	wm_adsp_halo_event(&cs35l41->dsp, NULL, NULL, SND_SOC_DAPM_PRE_PMD);
-	wm_adsp_halo_early_event(&cs35l41->dsp, SND_SOC_DAPM_PRE_PMD);
+	ret = wm_adsp_halo_event(&cs35l41->dsp, NULL, NULL,
+				 SND_SOC_DAPM_PRE_PMD);
+	if (ret)
+		dev_warn(cs35l41->dev, "HALO shutdown during removal failed: %d\n",
+			 ret);
+	ret = wm_adsp_halo_early_event(&cs35l41->dsp, SND_SOC_DAPM_PRE_PMD);
+	if (ret)
+		dev_warn(cs35l41->dev, "HALO state cleanup during removal failed: %d\n",
+			 ret);
 	cs35l41->halo_booted = false;
 	snd_soc_unregister_component(cs35l41->dev);
 	wm_adsp2_remove(&cs35l41->dsp);
