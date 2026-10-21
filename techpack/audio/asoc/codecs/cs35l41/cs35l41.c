@@ -107,34 +107,42 @@ static int cs35l41_dsp_power_ev(struct snd_soc_dapm_widget *w,
 {
 	struct snd_soc_component *codec = snd_soc_dapm_to_component(w->dapm);
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(codec);
-	int ret = 0;
+	struct wm_adsp *dsp = &cs35l41->dsp;
+	int ret = 0, cleanup_ret;
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
 		if (!cs35l41->halo_booted) {
 			/*
-			 * A forced reload or failed start can leave firmware state
-			 * registered even though halo_booted is clear. Tear it down
-			 * before queueing the next boot.
+			 * A failed boot or firmware reload can leave DSP state
+			 * behind even when the public boot flag is clear. Stop the
+			 * core first, then release its controls/algorithm regions.
 			 */
-			if (cs35l41->dsp.booted) {
-				wm_adsp_halo_early_event(&cs35l41->dsp,
+			if (dsp->booted || dsp->running ||
+			    !list_empty(&dsp->ctl_list) ||
+			    !list_empty(&dsp->alg_regions)) {
+				ret = wm_adsp_halo_event(dsp, w, kcontrol,
 							 SND_SOC_DAPM_PRE_PMD);
-				wm_adsp_halo_event(&cs35l41->dsp, NULL, NULL,
-						   SND_SOC_DAPM_PRE_PMD);
+				cleanup_ret = wm_adsp_halo_early_event(
+					dsp, SND_SOC_DAPM_PRE_PMD);
+				if (!ret)
+					ret = cleanup_ret;
+				if (ret)
+					return ret;
 			}
-			ret = wm_adsp_halo_early_event(&cs35l41->dsp, event);
-		} else {
-			cs35l41->dsp.booted = true;
+			ret = wm_adsp_halo_early_event(dsp, event);
 		}
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
-		if (!cs35l41->halo_booted) {
-			ret = wm_adsp_halo_early_event(&cs35l41->dsp, event);
-			if (ret)
-				return ret;
-			ret = wm_adsp_halo_event(&cs35l41->dsp, w, kcontrol, event);
-		}
+		/*
+		 * The DSP is normally running here. Run the HALO shutdown event
+		 * before early teardown clears boot state and firmware controls.
+		 */
+		ret = wm_adsp_halo_event(dsp, w, kcontrol, event);
+		cleanup_ret = wm_adsp_halo_early_event(dsp, event);
+		if (!ret)
+			ret = cleanup_ret;
+		cs35l41->halo_booted = false;
 		break;
 	default:
 		break;
