@@ -1894,6 +1894,7 @@ static int cs35l41_codec_probe(struct snd_soc_component *codec)
 	cs35l41->component = codec;
 	ret = wm_adsp2_component_probe(&cs35l41->dsp, codec);
 	if (ret < 0) {
+		cs35l41->dsp.component = NULL;
 		cs35l41->component = NULL;
 		return ret;
 	}
