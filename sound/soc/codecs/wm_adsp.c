@@ -238,6 +238,19 @@
 #define HALO_SCRATCH3                        0x005d0
 #define HALO_SCRATCH4                        0x005d8
 #define HALO_CCM_CORE_CONTROL                0x41000
+#define HALO_SAMPLE_RATE_RX1                 0x00080
+#define HALO_SAMPLE_RATE_TX1                 0x00280
+#define HALO_INTP_CTL_NMI_CONTROL            0x46008
+#define HALO_DSP_RATE_SHIFT                  0
+#define HALO_DSP_RATE_MASK                   0x1f
+#define HALO_STREAM_ARB_MSTR0_CONFIG_0       0x45000
+#define HALO_STREAM_ARB_MSTR5_CONFIG_0       0x45050
+#define HALO_STREAM_ARB_TX1_CONFIG_0         0x45200
+#define HALO_STREAM_ARB_RX8_CONFIG_0         0x45438
+#define HALO_STREAM_ARB_IRQ0_CONFIG_0        0x45600
+#define HALO_STREAM_ARB_IRQ7_CONFIG_1        0x45674
+#define HALO_STREAM_ARB_MSTR_EN_MASK         0x1
+#define HALO_STREAM_ARB_MSTR_SEL_DEFAULT     0xfc
 #define HALO_CORE_SOFT_RESET                 0x00010
 #define HALO_WDT_CONTROL                     0x47000
 
@@ -345,19 +358,7 @@ static void wm_adsp_buf_free(struct list_head *list)
 	}
 }
 
-#define WM_ADSP_FW_MBC_VSS  0
-#define WM_ADSP_FW_HIFI     1
-#define WM_ADSP_FW_TX       2
-#define WM_ADSP_FW_TX_SPK   3
-#define WM_ADSP_FW_RX       4
-#define WM_ADSP_FW_RX_ANC   5
-#define WM_ADSP_FW_CTRL     6
-#define WM_ADSP_FW_ASR      7
-#define WM_ADSP_FW_TRACE    8
-#define WM_ADSP_FW_SPK_PROT 9
-#define WM_ADSP_FW_MISC     10
-
-#define WM_ADSP_NUM_FW      11
+/* Firmware IDs are declared in wm_adsp.h for codec drivers. */
 
 static const char *wm_adsp_fw_text[WM_ADSP_NUM_FW] = {
 	[WM_ADSP_FW_MBC_VSS] =  "MBC/VSS",
@@ -370,7 +371,9 @@ static const char *wm_adsp_fw_text[WM_ADSP_NUM_FW] = {
 	[WM_ADSP_FW_ASR] =      "ASR Assist",
 	[WM_ADSP_FW_TRACE] =    "Dbg Trace",
 	[WM_ADSP_FW_SPK_PROT] = "Protection",
-	[WM_ADSP_FW_MISC] =     "Misc",
+	[WM_ADSP_FW_MISC]     = "Misc",
+	[WM_ADSP_FW_DIAG]     = "Diag",
+	[WM_ADSP_FW_CALIB]    = "Diag Z",
 };
 
 struct wm_adsp_system_config_xm_hdr {
@@ -586,7 +589,9 @@ static const struct {
 		.caps = trace_caps,
 	},
 	[WM_ADSP_FW_SPK_PROT] = { .file = "spk-prot" },
-	[WM_ADSP_FW_MISC] =     { .file = "misc" },
+	[WM_ADSP_FW_MISC]     = { .file = "misc" },
+	[WM_ADSP_FW_DIAG]     = { .file = "diag" },
+	[WM_ADSP_FW_CALIB]    = { .file = "calib" },
 };
 
 struct wm_coeff_ctl_ops {
@@ -3125,6 +3130,102 @@ static void wm_adsp2_stop_core(struct wm_adsp *dsp)
 			   ADSP2_CORE_ENA | ADSP2_START, 0);
 }
 
+
+/* Cepheus CS35L41 HALO rate and stream-arbiter operations. */
+static int wm_halo_set_rate_block(struct wm_adsp *dsp, unsigned int rate_base,
+				  unsigned int n_rates, const u8 *rate_cache)
+{
+	unsigned int addr = dsp->base + rate_base, val;
+	int ret, i;
+
+	if (n_rates && !rate_cache)
+		return -EINVAL;
+	for (i = 0; i < n_rates; i++) {
+		val = rate_cache[i] << HALO_DSP_RATE_SHIFT;
+		ret = regmap_update_bits(dsp->regmap, addr + (i * 8),
+					 HALO_DSP_RATE_MASK, val);
+		if (ret) {
+			adsp_err(dsp, "Failed to set HALO stream rate %d: %d\n",
+				 i, ret);
+			return ret;
+		}
+	}
+	return 0;
+}
+
+static int wm_halo_clear_stream_arb(struct wm_adsp *dsp)
+{
+	unsigned int reg;
+	u32 values[3] = { 0, 0, 0 };
+	int ret;
+
+	for (reg = dsp->base + HALO_STREAM_ARB_MSTR0_CONFIG_0;
+	     reg <= dsp->base + HALO_STREAM_ARB_MSTR5_CONFIG_0; reg += 0x10) {
+		ret = regmap_update_bits(dsp->regmap, reg,
+					 HALO_STREAM_ARB_MSTR_EN_MASK, 0);
+		if (ret)
+			goto error;
+	}
+	for (reg = dsp->base + HALO_STREAM_ARB_MSTR0_CONFIG_0;
+	     reg <= dsp->base + HALO_STREAM_ARB_MSTR5_CONFIG_0; reg += 0x10) {
+		ret = regmap_bulk_write(dsp->regmap, reg, values, ARRAY_SIZE(values));
+		if (ret)
+			goto error;
+	}
+	for (reg = dsp->base + HALO_STREAM_ARB_TX1_CONFIG_0;
+	     reg <= dsp->base + HALO_STREAM_ARB_RX8_CONFIG_0; reg += 0x8) {
+		ret = regmap_write(dsp->regmap, reg,
+				   HALO_STREAM_ARB_MSTR_SEL_DEFAULT);
+		if (ret)
+			goto error;
+	}
+	values[0] = HALO_STREAM_ARB_MSTR_SEL_DEFAULT;
+	for (reg = dsp->base + HALO_STREAM_ARB_IRQ0_CONFIG_0;
+	     reg <= dsp->base + HALO_STREAM_ARB_IRQ7_CONFIG_1; reg += 0x10) {
+		ret = regmap_bulk_write(dsp->regmap, reg, values, 2);
+		if (ret)
+			goto error;
+	}
+	return 0;
+error:
+	adsp_err(dsp, "Failed to clear HALO stream arbiter at 0x%x: %d\n",
+		 reg, ret);
+	return ret;
+}
+
+int wm_halo_set_sample_rate(struct wm_adsp *dsp, bool playback,
+			    unsigned int rate_cfg)
+{
+	u8 *cache;
+	unsigned int n_rates, rate_base;
+	int i, ret = 0;
+
+	if (rate_cfg > HALO_DSP_RATE_MASK)
+		return -EINVAL;
+	mutex_lock(&dsp->pwr_lock);
+	if (playback) {
+		cache = dsp->rx_rate_cache;
+		n_rates = dsp->n_rx_rates;
+		rate_base = HALO_SAMPLE_RATE_RX1;
+	} else {
+		cache = dsp->tx_rate_cache;
+		n_rates = dsp->n_tx_rates;
+		rate_base = HALO_SAMPLE_RATE_TX1;
+	}
+	if (n_rates && !cache) {
+		ret = -EINVAL;
+		goto out;
+	}
+	for (i = 0; i < n_rates; i++)
+		cache[i] = rate_cfg;
+	if (dsp->running)
+		ret = wm_halo_set_rate_block(dsp, rate_base, n_rates, cache);
+out:
+	mutex_unlock(&dsp->pwr_lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(wm_halo_set_sample_rate);
+
 int wm_adsp_event(struct snd_soc_dapm_widget *w,
 		  struct snd_kcontrol *kcontrol, int event)
 {
@@ -3226,6 +3327,213 @@ err:
 }
 EXPORT_SYMBOL_GPL(wm_adsp_event);
 
+/*
+ * CS35L41 has cs35l41_private as component driver-data, not a wm_adsp[]
+ * array. Its DAPM callbacks pass the DSP instance explicitly.
+ */
+int wm_adsp_k_ctl_put(struct wm_adsp *dsp, const char *name, int value)
+{
+	struct snd_kcontrol *kctl;
+	struct soc_bytes_ext *bytes_ext;
+	struct wm_coeff_ctl *ctl;
+	__be32 be_value = cpu_to_be32(value);
+
+	if (!dsp->component || !dsp->component->card)
+		return -ENODEV;
+	kctl = snd_soc_card_get_kcontrol(dsp->component->card, name);
+	if (!kctl)
+		return -ENOENT;
+	bytes_ext = (struct soc_bytes_ext *)kctl->private_value;
+	ctl = bytes_ext_to_ctl(bytes_ext);
+	if (!ctl->cache || ctl->len < sizeof(be_value))
+		return -EINVAL;
+	memset(ctl->cache, 0, ctl->len);
+	memcpy(ctl->cache, &be_value, sizeof(be_value));
+	ctl->set = 1;
+	if (ctl->enabled && dsp->running)
+		return wm_coeff_write_control(ctl, ctl->cache, ctl->len);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(wm_adsp_k_ctl_put);
+
+int wm_adsp_k_ctl_get(struct wm_adsp *dsp, const char *name)
+{
+	struct snd_kcontrol *kctl;
+	struct soc_bytes_ext *bytes_ext;
+	struct wm_coeff_ctl *ctl;
+	__be32 value = 0;
+	int ret;
+
+	if (!dsp->component || !dsp->component->card)
+		return -ENODEV;
+	kctl = snd_soc_card_get_kcontrol(dsp->component->card, name);
+	if (!kctl)
+		return -ENOENT;
+	bytes_ext = (struct soc_bytes_ext *)kctl->private_value;
+	ctl = bytes_ext_to_ctl(bytes_ext);
+	if (!ctl->cache || ctl->len < sizeof(value))
+		return -EINVAL;
+	if (ctl->flags & WMFW_CTL_FLAG_VOLATILE) {
+		if (!ctl->enabled || !dsp->running)
+			return -EPERM;
+		ret = wm_coeff_read_control(ctl, &value, sizeof(value));
+		if (ret)
+			return ret;
+	} else {
+		memcpy(&value, ctl->cache, sizeof(value));
+	}
+	return (int)be32_to_cpu(value);
+}
+EXPORT_SYMBOL_GPL(wm_adsp_k_ctl_get);
+
+static int wm_adsp_halo_apply_calibration(struct wm_adsp *dsp)
+{
+	int ret = 0;
+
+	switch (dsp->fw) {
+	case WM_ADSP_FW_CALIB:
+		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Diag Z cd CAL_AMBIENT",
+					dsp->ambient);
+		break;
+	case WM_ADSP_FW_DIAG:
+		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Diag cd CAL_AMBIENT",
+					dsp->ambient);
+		break;
+	case WM_ADSP_FW_SPK_PROT:
+		ret = wm_adsp_k_ctl_put(dsp, "DSP1X Protection cd CAL_R",
+					dsp->cal_z);
+		if (!ret)
+			ret = wm_adsp_k_ctl_put(dsp,
+					"DSP1X Protection cd CAL_STATUS",
+					dsp->cal_status);
+		if (!ret)
+			ret = wm_adsp_k_ctl_put(dsp,
+					"DSP1X Protection cd CAL_CHECKSUM",
+					dsp->cal_chksum);
+		break;
+	default:
+		break;
+	}
+	if (ret == -ENOENT) {
+		adsp_dbg(dsp, "Calibration controls not available yet\n");
+		return 0;
+	}
+	return ret;
+}
+
+int wm_adsp_halo_early_event(struct wm_adsp *dsp, int event)
+{
+	struct wm_coeff_ctl *ctl;
+
+	switch (event) {
+	case SND_SOC_DAPM_PRE_PMU:
+		wm_halo_stop_core(dsp);
+		queue_work(system_unbound_wq, &dsp->boot_work);
+		break;
+	case SND_SOC_DAPM_PRE_PMD:
+		mutex_lock(&dsp->pwr_lock);
+		wm_adsp_debugfs_clear(dsp);
+		dsp->fw_id = 0;
+		dsp->fw_id_version = 0;
+		dsp->booted = false;
+		list_for_each_entry(ctl, &dsp->ctl_list, list)
+			ctl->enabled = 0;
+		wm_adsp_free_alg_regions(dsp);
+		mutex_unlock(&dsp->pwr_lock);
+		break;
+	default:
+		break;
+	}
+	return 0;
+}
+EXPORT_SYMBOL_GPL(wm_adsp_halo_early_event);
+
+int wm_adsp_halo_event(struct wm_adsp *dsp,
+		       struct snd_soc_dapm_widget *w,
+		       struct snd_kcontrol *kcontrol, int event)
+{
+	int ret = 0;
+
+	switch (event) {
+	case SND_SOC_DAPM_POST_PMU:
+		flush_work(&dsp->boot_work);
+		mutex_lock(&dsp->pwr_lock);
+		if (!dsp->booted) {
+			ret = -EIO;
+			goto start_error;
+		}
+		ret = wm_adsp_halo_apply_calibration(dsp);
+		if (ret)
+			goto start_error;
+		ret = wm_coeff_sync_controls(dsp);
+		if (ret)
+			goto start_error;
+		ret = wm_halo_set_rate_block(dsp, HALO_SAMPLE_RATE_RX1,
+					     dsp->n_rx_rates, dsp->rx_rate_cache);
+		if (ret)
+			goto start_error;
+		ret = wm_halo_set_rate_block(dsp, HALO_SAMPLE_RATE_TX1,
+					     dsp->n_tx_rates, dsp->tx_rate_cache);
+		if (ret)
+			goto start_error;
+		ret = wm_halo_clear_stream_arb(dsp);
+		if (ret)
+			goto start_error;
+		ret = regmap_write(dsp->regmap,
+				   dsp->base + HALO_INTP_CTL_NMI_CONTROL, 0);
+		if (ret)
+			goto start_error;
+		if (dsp->ops->lock_memory) {
+			unsigned int lock_regions = dsp->unlock_all ?
+						    0xffffffff : dsp->lock_regions;
+			ret = dsp->ops->lock_memory(dsp, lock_regions);
+			if (ret)
+				goto start_error;
+		}
+		if (dsp->ops->start_core) {
+			ret = dsp->ops->start_core(dsp);
+			if (ret)
+				goto start_error;
+		}
+		if (wm_adsp_fw[dsp->fw].num_caps) {
+			ret = wm_adsp_buffer_init(dsp);
+			if (ret < 0)
+				goto start_error;
+		}
+		dsp->running = true;
+		mutex_unlock(&dsp->pwr_lock);
+		break;
+	case SND_SOC_DAPM_PRE_PMD:
+		wm_adsp_signal_event_controls(dsp, WM_ADSP_FW_EVENT_SHUTDOWN);
+		if (dsp->ops->show_fw_status)
+			dsp->ops->show_fw_status(dsp);
+		mutex_lock(&dsp->pwr_lock);
+		dsp->running = false;
+		if (dsp->ops->stop_core)
+			dsp->ops->stop_core(dsp);
+		ret = wm_halo_clear_stream_arb(dsp);
+		if (wm_adsp_fw[dsp->fw].num_caps)
+			wm_adsp_buffer_free(dsp);
+		dsp->fatal_error = false;
+		mutex_unlock(&dsp->pwr_lock);
+		if (ret)
+			adsp_warn(dsp, "Stream arbiter cleanup failed: %d\n", ret);
+		break;
+	default:
+		break;
+	}
+	return 0;
+
+start_error:
+	if (dsp->ops->stop_core)
+		dsp->ops->stop_core(dsp);
+	mutex_unlock(&dsp->pwr_lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(wm_adsp_halo_event);
+
+
+
 static int wm_halo_start_core(struct wm_adsp *dsp)
 {
 	return regmap_update_bits(dsp->regmap,
@@ -3306,16 +3614,38 @@ EXPORT_SYMBOL_GPL(wm_adsp2_init);
 
 int wm_halo_init(struct wm_adsp *dsp)
 {
-	int ret;
+	int i, ret;
 
 	ret = wm_adsp_common_init(dsp);
 	if (ret)
 		return ret;
 
 	dsp->ops = &wm_halo_ops;
+	dsp->cal_z = 8392;
+	dsp->ambient = 30;
+	dsp->cal_status = 1;
+	dsp->cal_chksum = dsp->cal_z + dsp->cal_status;
 
+	if (dsp->n_rx_rates) {
+		dsp->rx_rate_cache = kcalloc(dsp->n_rx_rates,
+					     sizeof(*dsp->rx_rate_cache), GFP_KERNEL);
+		if (!dsp->rx_rate_cache)
+			return -ENOMEM;
+		for (i = 0; i < dsp->n_rx_rates; i++)
+			dsp->rx_rate_cache[i] = 0x03;
+	}
+	if (dsp->n_tx_rates) {
+		dsp->tx_rate_cache = kcalloc(dsp->n_tx_rates,
+					     sizeof(*dsp->tx_rate_cache), GFP_KERNEL);
+		if (!dsp->tx_rate_cache) {
+			kfree(dsp->rx_rate_cache);
+			dsp->rx_rate_cache = NULL;
+			return -ENOMEM;
+		}
+		for (i = 0; i < dsp->n_tx_rates; i++)
+			dsp->tx_rate_cache[i] = 0x03;
+	}
 	INIT_WORK(&dsp->boot_work, wm_adsp_boot_work);
-
 	return 0;
 }
 EXPORT_SYMBOL_GPL(wm_halo_init);
@@ -3330,6 +3660,10 @@ void wm_adsp2_remove(struct wm_adsp *dsp)
 		list_del(&ctl->list);
 		wm_adsp_free_ctl_blk(ctl);
 	}
+	kfree(dsp->rx_rate_cache);
+	kfree(dsp->tx_rate_cache);
+	dsp->rx_rate_cache = NULL;
+	dsp->tx_rate_cache = NULL;
 }
 EXPORT_SYMBOL_GPL(wm_adsp2_remove);
 
