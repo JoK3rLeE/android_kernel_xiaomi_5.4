@@ -238,6 +238,7 @@
 #define HALO_SCRATCH3                        0x005d0
 #define HALO_SCRATCH4                        0x005d8
 #define HALO_CCM_CORE_CONTROL                0x41000
+#define HALO_CORE_RESET                     0x00000200
 #define HALO_SAMPLE_RATE_RX1                 0x00080
 #define HALO_SAMPLE_RATE_TX1                 0x00280
 #define HALO_INTP_CTL_NMI_CONTROL            0x46008
@@ -3474,7 +3475,13 @@ int wm_adsp_halo_early_event(struct wm_adsp *dsp, int event)
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
-		wm_halo_stop_core(dsp);
+		ret = regmap_update_bits(dsp->regmap,
+					 dsp->base + HALO_CCM_CORE_CONTROL,
+					 HALO_CORE_RESET, HALO_CORE_RESET);
+		if (ret) {
+			adsp_err(dsp, "Error while resetting core: %d\n", ret);
+			return ret;
+		}
 		queue_work(system_unbound_wq, &dsp->boot_work);
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
@@ -3559,8 +3566,9 @@ int wm_adsp_halo_event(struct wm_adsp *dsp,
 			dsp->ops->show_fw_status(dsp);
 		mutex_lock(&dsp->pwr_lock);
 		dsp->running = false;
-		if (dsp->ops->stop_core)
-			dsp->ops->stop_core(dsp);
+		regmap_update_bits(dsp->regmap,
+				   dsp->base + HALO_CCM_CORE_CONTROL,
+				   HALO_CORE_EN, 0);
 		ret = wm_halo_clear_stream_arb(dsp);
 		if (wm_adsp_fw[dsp->fw].num_caps)
 			wm_adsp_buffer_free(dsp);
@@ -3575,9 +3583,9 @@ int wm_adsp_halo_event(struct wm_adsp *dsp,
 	return 0;
 
 start_error:
-	if (dsp->ops->stop_core)
-		dsp->ops->stop_core(dsp);
 	mutex_unlock(&dsp->pwr_lock);
+	regmap_update_bits(dsp->regmap, dsp->base + HALO_CCM_CORE_CONTROL,
+			   HALO_CORE_EN, 0);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(wm_adsp_halo_event);
