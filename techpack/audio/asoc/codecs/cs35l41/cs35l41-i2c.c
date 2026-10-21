@@ -131,6 +131,7 @@ static int cs35l41_i2c_remove(struct i2c_client *client)
 	 */
 	wm_adsp_halo_event(&cs35l41->dsp, NULL, NULL, SND_SOC_DAPM_PRE_PMD);
 	wm_adsp_halo_early_event(&cs35l41->dsp, SND_SOC_DAPM_PRE_PMD);
+	cs35l41->halo_booted = false;
 	snd_soc_unregister_component(cs35l41->dev);
 	wm_adsp2_remove(&cs35l41->dsp);
 
