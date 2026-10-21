@@ -610,7 +610,7 @@ static const struct {
 	[WM_ADSP_FW_SPK_PROT] = { .file = "spk-prot" },
 	[WM_ADSP_FW_MISC]     = { .file = "misc" },
 	[WM_ADSP_FW_DIAG]     = { .file = "diag" },
-	[WM_ADSP_FW_CALIB]    = { .file = "calib" },
+	[WM_ADSP_FW_CALIB]    = { .file = "diag-z" },
 };
 
 struct wm_coeff_ctl_ops {
