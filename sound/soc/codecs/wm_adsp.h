@@ -87,6 +87,7 @@ struct wm_adsp {
 	int cal_chksum;
 	int block_bypass;
 	int block_bypass_in_enh;
+	bool block_bypass_in_enh_set;
 
 	struct wm_adsp_ops *ops;
 
