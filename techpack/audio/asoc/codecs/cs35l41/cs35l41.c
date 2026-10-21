@@ -245,7 +245,9 @@ static int cs35l41_dsp_fw_put(struct snd_kcontrol *kcontrol,
 	mutex_lock(&dsp->pwr_lock);
 	if (dsp->fw == fw) {
 		ret = 0;
-	} else if (dsp->booted || dsp->running || !list_empty(&dsp->compr_list)) {
+	} else if (dsp->booted || dsp->running || dsp->preloaded ||
+		   !list_empty(&dsp->compr_list) ||
+		   !list_empty(&dsp->buffer_list)) {
 		ret = -EBUSY;
 	} else {
 		dsp->fw = fw;
