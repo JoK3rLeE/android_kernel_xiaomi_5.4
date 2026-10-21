@@ -237,7 +237,9 @@ static int _name(struct snd_kcontrol *kcontrol, \
 { \
 	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol); \
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component); \
+	mutex_lock(&cs35l41->dsp.pwr_lock); \
 	ucontrol->value.integer.value[0] = cs35l41->dsp._field; \
+	mutex_unlock(&cs35l41->dsp.pwr_lock); \
 	return 0; \
 }
 
@@ -249,9 +251,13 @@ static int _name(struct snd_kcontrol *kcontrol, \
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component); \
 	struct wm_adsp *dsp = &cs35l41->dsp; \
 	int value = ucontrol->value.integer.value[0]; \
-	if (dsp->_field == value) \
+	mutex_lock(&dsp->pwr_lock); \
+	if (dsp->_field == value) { \
+		mutex_unlock(&dsp->pwr_lock); \
 		return 0; \
+	} \
 	dsp->_field = value; \
+	mutex_unlock(&dsp->pwr_lock); \
 	return 1; \
 }
 
@@ -264,10 +270,14 @@ static int cs35l41_cal_z_put(struct snd_kcontrol *kcontrol,
 	struct wm_adsp *dsp = &cs35l41->dsp;
 	int value = ucontrol->value.integer.value[0];
 
-	if (dsp->cal_z == value)
+	mutex_lock(&dsp->pwr_lock);
+	if (dsp->cal_z == value) {
+		mutex_unlock(&dsp->pwr_lock);
 		return 0;
+	}
 	dsp->cal_z = value;
 	dsp->cal_chksum = dsp->cal_z + dsp->cal_status;
+	mutex_unlock(&dsp->pwr_lock);
 	return 1;
 }
 CS35L41_CAL_GET(cs35l41_ambient_get, ambient)
@@ -291,7 +301,9 @@ static int cs35l41_block_bypass_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component);
 
+	mutex_lock(&cs35l41->dsp.pwr_lock);
 	ucontrol->value.enumerated.item[0] = cs35l41->dsp.block_bypass;
+	mutex_unlock(&cs35l41->dsp.pwr_lock);
 	return 0;
 }
 
@@ -334,7 +346,9 @@ static int cs35l41_block_bypass_in_enh_get(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component);
 
+	mutex_lock(&cs35l41->dsp.pwr_lock);
 	ucontrol->value.enumerated.item[0] = cs35l41->dsp.block_bypass_in_enh;
+	mutex_unlock(&cs35l41->dsp.pwr_lock);
 	return 0;
 }
 
