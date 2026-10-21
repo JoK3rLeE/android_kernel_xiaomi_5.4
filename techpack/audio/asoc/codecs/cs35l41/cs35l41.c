@@ -246,6 +246,7 @@ static int cs35l41_dsp_fw_put(struct snd_kcontrol *kcontrol,
 	if (dsp->fw == fw) {
 		ret = 0;
 	} else if (dsp->booted || dsp->running || dsp->preloaded ||
+		   work_busy(&dsp->boot_work) ||
 		   !list_empty(&dsp->compr_list) ||
 		   !list_empty(&dsp->buffer_list)) {
 		ret = -EBUSY;
